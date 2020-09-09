@@ -120,6 +120,8 @@ spec:
         status:
           description: SQLInstanceStatus defines the observed state of Instance
           properties:
+            privateIpAddress:
+              type: string
             publicIpAddress:
               type: string
           type: object
