@@ -1,0 +1,224 @@
+dockerImage: 'taskcluster/taskcluster:v30.0.2'
+trustProxy: true
+forceSSL: false
+nodeEnv: production
+useKubernetesDnsServiceDiscovery: true
+auth:
+  procs:
+    web:
+      replicas: 1
+      cpu: 100m
+      memory: 200Mi
+    purgeExpiredClients:
+      cpu: 800m
+      memory: 500Mi
+  debug: ''
+  level: notice
+built_in_workers:
+  procs:
+    server:
+      replicas: 1
+      cpu: 10m
+      memory: 50Mi
+  debug: ''
+  taskcluster_client_id: static/taskcluster/built-in-workers
+  level: notice
+github:
+  procs:
+    web:
+      replicas: 1
+      cpu: 10m
+      memory: 50Mi
+    worker:
+      replicas: 1
+      cpu: 200m
+      memory: 200Mi
+    sync:
+      cpu: 800m
+      memory: 500Mi
+  debug: ''
+  taskcluster_client_id: static/taskcluster/github
+  level: notice
+hooks:
+  procs:
+    web:
+      replicas: 1
+      cpu: 50m
+      memory: 50Mi
+    scheduler:
+      replicas: 1
+      cpu: 10m
+      memory: 50Mi
+    listeners:
+      replicas: 1
+      cpu: 50m
+      memory: 50Mi
+    expires:
+      cpu: 50m
+      memory: 50Mi
+  debug: ''
+  taskcluster_client_id: static/taskcluster/hooks
+  level: notice
+index:
+  procs:
+    web:
+      replicas: 1
+      cpu: 50m
+      memory: 50Mi
+    handlers:
+      replicas: 1
+      cpu: 50m
+      memory: 50Mi
+    expire:
+      cpu: 50m
+      memory: 50Mi
+  debug: ''
+  level: notice
+  taskcluster_client_id: static/taskcluster/index
+notify:
+  procs:
+    web:
+      replicas: 1
+      cpu: 100m
+      memory: 100Mi
+    irc:
+      replicas: 1
+      cpu: 50m
+      memory: 100Mi
+    handler:
+      replicas: 1
+      cpu: 50m
+      memory: 100Mi
+  debug: ''
+  taskcluster_client_id: static/taskcluster/notify
+  level: notice
+purge_cache:
+  procs:
+    web:
+      replicas: 1
+      cpu: 100m
+      memory: 50Mi
+    expireCachePurges:
+      cpu: 800m
+      memory: 500Mi
+  debug: ''
+  level: notice
+  taskcluster_client_id: static/taskcluster/purge-cache
+queue:
+  procs:
+    web:
+      replicas: 1
+      cpu: 400m
+      memory: 200Mi
+    claimResolver:
+      replicas: 1
+      cpu: 50m
+      memory: 50Mi
+    deadlineResolver:
+      replicas: 1
+      cpu: 50m
+      memory: 100Mi
+    dependencyResolver:
+      replicas: 1
+      cpu: 100m
+      memory: 100Mi
+    expireArtifacts:
+      cpu: 200m
+      memory: 100Mi
+    expireTask:
+      cpu: 50m
+      memory: 100Mi
+    expireTaskGroups:
+      cpu: 50m
+      memory: 50Mi
+    expireTaskGroupMembers:
+      cpu: 100m
+      memory: 50Mi
+    expireTaskGroupSizes:
+      cpu: 800m
+      memory: 500Mi
+    expireTaskDependency:
+      cpu: 50m
+      memory: 50Mi
+    expireTaskRequirement:
+      cpu: 50m
+      memory: 50Mi
+    expireQueueMessages:
+      cpu: 50m
+      memory: 100Mi
+    expireWorkerInfo:
+      cpu: 200m
+      memory: 100Mi
+  debug: ''
+  taskcluster_client_id: static/taskcluster/queue
+  level: notice
+secrets:
+  procs:
+    web:
+      replicas: 1
+      cpu: 100m
+      memory: 50Mi
+    expire:
+      cpu: 800m
+      memory: 500Mi
+  debug: ''
+  taskcluster_client_id: static/taskcluster/secrets
+  level: notice
+web_server:
+  procs:
+    web:
+      replicas: 1
+      cpu: 500m
+      memory: 300Mi
+    scanner:
+      cpu: 800m
+      memory: 500Mi
+    cleanup_expire_auth_codes:
+      cpu: 800m
+      memory: 500Mi
+    cleanup_expire_access_tokens:
+      cpu: 800m
+      memory: 500Mi
+  debug: ''
+  level: notice
+  taskcluster_client_id: static/taskcluster/web-server
+worker_manager:
+  procs:
+    web:
+      replicas: 1
+      cpu: 100m
+      memory: 100Mi
+    provisioner:
+      replicas: 1
+      cpu: 50m
+      memory: 200Mi
+    workerscanner:
+      replicas: 1
+      cpu: 200m
+      memory: 200Mi
+    expire_workers:
+      cpu: 200m
+      memory: 200Mi
+    expire_worker_pools:
+      cpu: 800m
+      memory: 500Mi
+    expire_errors:
+      cpu: 800m
+      memory: 500Mi
+  debug: ''
+  level: notice
+  taskcluster_client_id: static/taskcluster/worker-manager
+ui:
+  procs:
+    web:
+      replicas: 1
+      cpu: 50m
+      memory: 10Mi
+  debug: ''
+references:
+  procs:
+    web:
+      replicas: 1
+      cpu: 10m
+      memory: 10Mi
+  debug: ''

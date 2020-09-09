@@ -1,0 +1,769 @@
+package controllers
+
+import (
+	"context"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"github.com/go-logr/logr"
+	"github.com/jackc/pgx/v4"
+	rabbithole "github.com/michaelklishin/rabbit-hole"
+	taskclusterv1beta1 "github.com/wellplayedgames/taskcluster-operator/api/v1beta1"
+	sqlv1beta1 "github.com/wellplayedgames/taskcluster-operator/pkg/cnrm/sql/v1beta1"
+	"github.com/wellplayedgames/taskcluster-operator/pkg/pwgen"
+	"github.com/wellplayedgames/tiny-operator/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"strings"
+	"time"
+)
+
+const (
+	defaultDockerImage = "taskcluster/taskcluster:v30.0.2"
+	stateKey           = "state"
+	fieldOwner         = "taskcluster.wellplayed.games"
+)
+
+var (
+	postgresServices = []string{
+		"",
+		"github",
+		"auth",
+		"hooks",
+		"index",
+		"notify",
+		"purge_cache",
+		"queue",
+		"secrets",
+		"web_server",
+		"worker_manager",
+	}
+
+	pulseServices = []string{
+		"auth",
+		"github",
+		"hooks",
+		"index",
+		"notify",
+		"queue",
+		"web_server",
+		"worker_manager",
+	}
+
+	accessTokenServices = []string{
+		"built_in_workers",
+		"github",
+		"hooks",
+		"index",
+		"notify",
+		"purge_cache",
+		"queue",
+		"root",
+		"secrets",
+		"web_server",
+		"worker_manager",
+	}
+
+	cryptoServices = []string{
+		"auth",
+		"hooks",
+		"secrets",
+		"web_server",
+	}
+)
+
+type ServiceAccount struct {
+	AccessToken      string `json:"accessToken,omitempty"`
+	PostgresPassword string `json:"postgresPassword,omitempty"`
+	PulsePassword    string `json:"pulsePassword,omitempty"`
+	AzureSigningConfig
+}
+
+type TaskClusterState struct {
+	ServiceAccounts map[string]*ServiceAccount `json:"serviceAccounts,omitempty"`
+	SessionSecret   string                     `json:"sessionSecret,omitempty"`
+}
+
+type PostgresDatabase struct {
+	PublicIP  string `json:"publicIp"`
+	PrivateIP string `json:"privateIp"`
+	Username  string `json:"username"`
+	Password  string `json:"password"`
+	Database  string `json:"database"`
+}
+
+// ConnectionString returns an admin Postgres connection string for this database.
+func (d *PostgresDatabase) ConnectionString(public bool) string {
+	ip := d.PrivateIP
+	if public {
+		ip = d.PublicIP
+	}
+
+	return fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=require", d.Username, d.Password, ip, d.Database)
+}
+
+type TaskClusterOperations struct {
+	logr.Logger
+	client.Client
+	Scheme *runtime.Scheme
+	types.NamespacedName
+
+	ChartPath    string
+	UsePublicIPs bool
+
+	source taskclusterv1beta1.Instance
+	state  TaskClusterState
+	dbInfo PostgresDatabase
+	db     *pgx.Conn
+	pulse  *rabbithole.Client
+}
+
+func (o *TaskClusterOperations) Prepare(ctx context.Context) error {
+	if err := o.Client.Get(ctx, o.NamespacedName, &o.source); err != nil {
+		return err
+	}
+
+	if err := o.readState(ctx); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (o *TaskClusterOperations) Close(ctx context.Context) error {
+	var err error
+
+	if db := o.db; db != nil {
+		o.db = nil
+		err = errors.Append(err, o.db.Close(ctx))
+	}
+
+	o.pulse = nil
+	return nil
+}
+
+func (o *TaskClusterOperations) connectToPostgres(ctx context.Context) (*pgx.Conn, error) {
+	if o.db != nil {
+		return o.db, nil
+	}
+
+	dbRef := o.source.Spec.DatabaseRef
+	if dbRef == nil {
+		return nil, fmt.Errorf("no database ref specified")
+	}
+
+	ctx2, cancel := context.WithTimeout(ctx, time.Second*30)
+	defer cancel()
+
+	dbName := types.NamespacedName{
+		Namespace: o.Namespace,
+		Name:      dbRef.Name,
+	}
+
+	dbInfo, err := o.fetchPostgresDatabase(ctx2, dbName)
+	if err != nil {
+		return nil, err
+	}
+
+	// Ensure database exists
+	{
+		dbInfoWithoutDB := dbInfo
+		dbInfoWithoutDB.Database = ""
+		conn, err := pgx.Connect(ctx2, dbInfoWithoutDB.ConnectionString(o.UsePublicIPs))
+		if err != nil {
+			return nil, err
+		}
+
+		dbName := pgx.Identifier{dbInfo.Database}.Sanitize()
+
+		rows, err := conn.Query(ctx2, "SELECT 1 FROM pg_database WHERE datname = $1", pgx.QuerySimpleProtocol(true), dbInfo.Database)
+		if err != nil {
+			return nil, fmt.Errorf("error checking database: %w", err)
+		}
+
+		defer conn.Close(ctx)
+		defer rows.Close()
+
+		if !rows.Next() {
+			if _, err := conn.Exec(ctx2, "CREATE DATABASE "+dbName); err != nil {
+				return nil, fmt.Errorf("error creating database: %w", err)
+			}
+		}
+	}
+
+	conn, err := pgx.Connect(ctx2, dbInfo.ConnectionString(o.UsePublicIPs))
+	if err != nil {
+		return nil, err
+	}
+
+	o.dbInfo = dbInfo
+	o.db = conn
+	return conn, nil
+}
+
+func (o *TaskClusterOperations) fetchPostgresDatabase(ctx context.Context, name types.NamespacedName) (PostgresDatabase, error) {
+	var database sqlv1beta1.SQLDatabase
+	if err := o.Client.Get(ctx, name, &database); err != nil {
+		return PostgresDatabase{}, err
+	}
+
+	if database.Spec.InstanceRef == nil {
+		return PostgresDatabase{}, fmt.Errorf("SQL database missing instanceRef")
+	}
+
+	instanceName := types.NamespacedName{
+		Name:      database.Spec.InstanceRef.Name,
+		Namespace: name.Namespace,
+	}
+
+	var instance sqlv1beta1.SQLInstance
+	if err := o.Client.Get(ctx, instanceName, &instance); err != nil {
+		return PostgresDatabase{}, nil
+	}
+
+	rootPasswordObj := instance.Spec.RootPassword
+	if rootPasswordObj == nil {
+		return PostgresDatabase{}, fmt.Errorf("SQL instance root password not specified")
+	}
+
+	rootPassword := ""
+	if rootPasswordObj.Value != nil {
+		rootPassword = *rootPasswordObj.Value
+	} else if rootPasswordObj.ValueFrom == nil {
+		return PostgresDatabase{}, fmt.Errorf("SQL instance password must set value or valueFrom")
+	} else if rootPasswordObj.ValueFrom.SecretKeyRef != nil {
+		secretName := types.NamespacedName{
+			Namespace: name.Namespace,
+			Name:      rootPasswordObj.ValueFrom.SecretKeyRef.Name,
+		}
+
+		var dbSecret corev1.Secret
+		if err := o.Client.Get(ctx, secretName, &dbSecret); err != nil {
+			return PostgresDatabase{}, err
+		}
+
+		rootPassword = (string)(dbSecret.Data[rootPasswordObj.ValueFrom.SecretKeyRef.Key])
+	} else {
+		return PostgresDatabase{}, fmt.Errorf("only secrets are supported for valueFrom")
+	}
+
+	publicIp := instance.Status.PublicIPAddress
+	privateIp := instance.Status.PrivateIPAddress
+	if publicIp == "" || privateIp == "" {
+		return PostgresDatabase{}, fmt.Errorf("SQL instance has no IP address")
+	}
+
+	return PostgresDatabase{
+		PublicIP:  publicIp,
+		PrivateIP: privateIp,
+		Username:  "postgres",
+		Password:  rootPassword,
+		Database:  name.Name,
+	}, nil
+}
+
+func (o *TaskClusterOperations) connectToPulse(ctx context.Context) (*rabbithole.Client, error) {
+	username := "guest"
+	password := "guest"
+
+	if pulseSecretRef := o.source.Spec.Pulse.AdminSecretRef; pulseSecretRef != nil {
+		pulseSecretName := types.NamespacedName{
+			Namespace: o.Namespace,
+			Name:      pulseSecretRef.Name,
+		}
+
+		var secret corev1.Secret
+		if err := o.Client.Get(ctx, pulseSecretName, &secret); err != nil {
+			return nil, err
+		}
+
+		if secret.Data == nil {
+			secret.Data = map[string][]byte{}
+		}
+
+		if s := (string)(secret.Data["admin-username"]); s != "" {
+			username = s
+		}
+
+		if s := (string)(secret.Data["admin-password"]); s != "" {
+			password = s
+		}
+	}
+
+	// This is hardcoded to HTTPS because TaskCluster requires HTTPS anyway.
+	endpoint := fmt.Sprintf("https://%s", o.source.Spec.Pulse.Host)
+	client, err := rabbithole.NewClient(endpoint, username, password)
+	if err != nil {
+		return nil, err
+	}
+
+	o.pulse = client
+	return client, nil
+}
+
+func (o *TaskClusterOperations) readState(ctx context.Context) error {
+	name := o.NamespacedName
+	name.Name = fmt.Sprintf("%s-state", name.Name)
+
+	var secret corev1.Secret
+	if err := client.IgnoreNotFound(o.Client.Get(ctx, name, &secret)); err != nil {
+		return err
+	}
+
+	rawState, ok := secret.Data[stateKey]
+	if !ok {
+		return nil
+	}
+
+	return json.Unmarshal(rawState, &o.state)
+}
+
+func (o *TaskClusterOperations) writeState(ctx context.Context) error {
+	rawState, err := json.Marshal(&o.state)
+	if err != nil {
+		return err
+	}
+
+	var secret corev1.Secret
+	secret.TypeMeta.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("Secret"))
+	secret.Namespace = o.Namespace
+	secret.Name = fmt.Sprintf("%s-state", o.Name)
+	secret.Data = map[string][]byte{}
+
+	ctrl.SetControllerReference(&o.source, &secret, o.Scheme)
+	secret.Data[stateKey] = rawState
+
+	return o.Client.Patch(ctx, &secret, client.Apply, client.ForceOwnership, client.FieldOwner(fieldOwner))
+}
+
+func (o *TaskClusterOperations) MigrateState(ctx context.Context) error {
+	// Ensure VHost
+	pulse, err := o.connectToPulse(ctx)
+	if err != nil {
+		return err
+	}
+
+	_, err = pulse.PutVhost(o.source.Spec.Pulse.Vhost, rabbithole.VhostSettings{
+		Tracing: false,
+	})
+	if err != nil {
+		return err
+	}
+
+	if o.state.ServiceAccounts == nil {
+		o.state.ServiceAccounts = map[string]*ServiceAccount{}
+	}
+
+	if o.state.SessionSecret == "" {
+		o.state.SessionSecret = pwgen.AlphaNumeric(20)
+	}
+
+	for _, svc := range postgresServices {
+		if err := o.ensurePostgresAccess(ctx, svc); err != nil {
+			return err
+		}
+	}
+
+	for _, svc := range pulseServices {
+		if err := o.ensurePulseAccess(ctx, svc); err != nil {
+			return err
+		}
+	}
+
+	for _, svc := range cryptoServices {
+		o.ensureCrypto(svc)
+	}
+
+	for _, svc := range accessTokenServices {
+		o.ensureAccessToken(svc)
+	}
+
+	return o.writeState(ctx)
+}
+
+func (o *TaskClusterOperations) RenderValues(ctx context.Context) (*TaskClusterValues, error) {
+	spec := &o.source.Spec
+	rootURL := spec.RootURL
+	if strings.HasSuffix(rootURL, "/") {
+		rootURL = rootURL[:len(rootURL)-1]
+	}
+
+	values := &TaskClusterValues{
+		Auth: AuthConfig{
+			PostgresAccess:     o.getPostgresAccess("auth"),
+			PulseAccess:        o.getPulseAccess("auth"),
+			AzureSigningConfig: o.getCrypto("auth"),
+			AzureAccountKey:    spec.AzureAccountID,
+			StaticAccounts: []taskclusterv1beta1.StaticAccessToken{
+				o.getStaticAccessToken("built_in_workers"),
+				o.getStaticAccessToken("github"),
+				o.getStaticAccessToken("hooks"),
+				o.getStaticAccessToken("index"),
+				o.getStaticAccessToken("notify"),
+				o.getStaticAccessToken("purge_cache"),
+				o.getStaticAccessToken("queue"),
+				o.getStaticAccessToken("secrets"),
+				o.getStaticAccessToken("web_server"),
+				o.getStaticAccessToken("worker_manager"),
+				o.getStaticAccessToken("root"),
+			},
+		},
+		BuiltInWorkers: BuiltInWorkersConfig{
+			TaskClusterAccess: o.getTaskClusterAccess("built_in_workers"),
+		},
+		GitHub: GitHubConfig{
+			TaskClusterAccess: o.getTaskClusterAccess("github"),
+			PostgresAccess:    o.getPostgresAccess("github"),
+			PulseAccess:       o.getPulseAccess("github"),
+			BotUsername:       spec.GitHub.BotUsername,
+		},
+		Hooks: HooksConfig{
+			TaskClusterAccess:  o.getTaskClusterAccess("hooks"),
+			PostgresAccess:     o.getPostgresAccess("hooks"),
+			PulseAccess:        o.getPulseAccess("hooks"),
+			AzureSigningConfig: o.getCrypto("hooks"),
+		},
+		Index: IndexConfig{
+			TaskClusterAccess: o.getTaskClusterAccess("index"),
+			PostgresAccess:    o.getPostgresAccess("index"),
+			PulseAccess:       o.getPulseAccess("index"),
+		},
+		Notify: NotifyConfig{
+			TaskClusterAccess:  o.getTaskClusterAccess("notify"),
+			PostgresAccess:     o.getPostgresAccess("notify"),
+			PulseAccess:        o.getPulseAccess("notify"),
+			EmailSourceAddress: spec.EmailSourceAddress,
+		},
+		PurgeCache: PurgeCacheConfig{
+			TaskClusterAccess: o.getTaskClusterAccess("purge_cache"),
+			PostgresAccess:    o.getPostgresAccess("purge_cache"),
+		},
+		Queue: QueueConfig{
+			TaskClusterAccess:     o.getTaskClusterAccess("queue"),
+			PostgresAccess:        o.getPostgresAccess("queue"),
+			PulseAccess:           o.getPulseAccess("queue"),
+			PublicArtifactBucket:  spec.PublicArtifactBucket,
+			PrivateArtifactBucket: spec.PrivateArtifactBucket,
+			ArtifactRegion:        spec.ArtifactRegion,
+		},
+		Secrets: SecretsConfig{
+			TaskClusterAccess:  o.getTaskClusterAccess("secrets"),
+			PostgresAccess:     o.getPostgresAccess("secrets"),
+			AzureSigningConfig: o.getCrypto("secrets"),
+		},
+		WebServer: WebServerConfig{
+			TaskClusterAccess:           o.getTaskClusterAccess("web_server"),
+			PostgresAccess:              o.getPostgresAccess("web_server"),
+			PulseAccess:                 o.getPulseAccess("web_server"),
+			AzureSigningConfig:          o.getCrypto("web_server"),
+			PublicURL:                   spec.RootURL,
+			AdditionalAllowedCORSOrigin: spec.AdditionalAllowedCORSOrigin,
+			SessionSecret:               o.state.SessionSecret,
+			RegisteredClients:           []string{},
+		},
+		WorkerManager: WorkerManagerConfig{
+			TaskClusterAccess: o.getTaskClusterAccess("worker_manager"),
+			PostgresAccess:    o.getPostgresAccess("worker_manager"),
+			PulseAccess:       o.getPulseAccess("worker_manager"),
+			Providers:         map[string]json.RawMessage{},
+		},
+		UI: UIConfig{
+			GraphQLSubscriptionEndpoint: fmt.Sprintf("%s/subscription", rootURL),
+			GraphQLEndpoint:             fmt.Sprintf("%s/graphql", rootURL),
+			BannerMessage:               spec.BannerMessage,
+			UILoginStrategyNames:        strings.Join(spec.LoginStrategies, " "),
+		},
+		RootURL:             rootURL,
+		ApplicationName:     spec.ApplicationName,
+		IngressStaticIPName: spec.Ingress.StaticIPName,
+		IngressExternalDNS:  spec.Ingress.ExternalDNSName,
+		PulseHostname:       spec.Pulse.Host,
+		PulseVHost:          spec.Pulse.Vhost,
+		DockerImage:         spec.DockerImage,
+		AzureAccountID:      spec.AzureAccountID,
+	}
+
+	// Fetch WST secret
+	if ref := spec.WebSockTunnelSecretRef; ref != nil {
+		var secret corev1.Secret
+		name := types.NamespacedName{
+			Namespace: o.Namespace,
+			Name:      ref.Name,
+		}
+		if err := o.Client.Get(ctx, name, &secret); err != nil {
+			return nil, err
+		}
+
+		values.Auth.WebSockTunnelSecret = (string)(secret.Data["secret"])
+	}
+
+	// Fetch Azure credentials.
+	azureAccounts := map[string]string{}
+	if ref := spec.AzureSecretRef; ref != nil {
+		var secret corev1.Secret
+		name := types.NamespacedName{
+			Namespace: o.Namespace,
+			Name:      ref.Name,
+		}
+		if err := o.Client.Get(ctx, name, &secret); err != nil {
+			return nil, err
+		}
+
+		for k, v := range secret.Data {
+			azureAccounts[k] = (string)(v)
+		}
+
+		values.Auth.AzureAccounts = azureAccounts
+		accountKey := azureAccounts[spec.AzureAccountID]
+		azureAccess := AzureAccess{accountKey}
+		values.Queue.AzureAccess = azureAccess
+	}
+
+	// Fetch AWS credentials.
+	if ref := spec.AWSSecretRef; ref != nil {
+		var secret corev1.Secret
+		name := types.NamespacedName{
+			Namespace: o.Namespace,
+			Name:      ref.Name,
+		}
+		if err := o.Client.Get(ctx, name, &secret); err != nil {
+			return nil, err
+		}
+
+		awsAccess := AWSAccess{
+			AccessKeyID:     (string)(secret.Data["access-key-id"]),
+			SecretAccessKey: (string)(secret.Data["secret-access-key"]),
+		}
+		values.Notify.AWSAccess = awsAccess
+		values.Queue.AWSAccess = awsAccess
+	}
+
+	// Fetch GitHub configuration.
+	if ref := spec.GitHub.SecretRef; ref != nil {
+		var secret corev1.Secret
+		name := types.NamespacedName{
+			Namespace: o.Namespace,
+			Name:      ref.Name,
+		}
+		if err := o.Client.Get(ctx, name, &secret); err != nil {
+			return nil, err
+		}
+
+		var webhookSecrets []string
+		for k, v := range secret.Data {
+			if !strings.HasPrefix("webhook-secret", k) {
+				continue
+			}
+
+			s := (string)(v)
+			webhookSecrets = append(webhookSecrets, s)
+		}
+
+		values.WebServer.UILoginStrategies.GitHub = &GitHubLoginStrategy{
+			ClientID:     (string)(secret.Data["client-id"]),
+			ClientSecret: (string)(secret.Data["client-secret"]),
+		}
+		values.GitHub.GitHubAppID = (string)(secret.Data["app-id"])
+		values.GitHub.GitHubPrivatePEM = (string)(secret.Data["private-pem"])
+		values.GitHub.WebhookSecrets = webhookSecrets
+	}
+
+	if ref := spec.AccessTokensSecretRef; ref != nil {
+		var secret corev1.Secret
+		name := types.NamespacedName{
+			Namespace: o.Namespace,
+			Name:      ref.Name,
+		}
+		if err := o.Client.Get(ctx, name, &secret); err != nil {
+			return nil, err
+		}
+
+		for _, v := range secret.Data {
+			var accessToken taskclusterv1beta1.StaticAccessToken
+			err := json.Unmarshal(v, &accessToken)
+			if err != nil {
+				return nil, err
+			}
+
+			values.Auth.StaticAccounts = append(values.Auth.StaticAccounts, accessToken)
+		}
+	}
+
+	// Load providers.
+	if ref := spec.WorkerManagerProvidersSecretRef; ref != nil {
+		var secret corev1.Secret
+		name := types.NamespacedName{
+			Namespace: o.Namespace,
+			Name:      ref.Name,
+		}
+		if err := o.Client.Get(ctx, name, &secret); err != nil {
+			return nil, err
+		}
+
+		for k, v := range secret.Data {
+			values.WorkerManager.Providers[k] = v
+		}
+	}
+
+	if values.DockerImage == "" {
+		values.DockerImage = defaultDockerImage
+	}
+
+	return values, nil
+}
+
+func (o *TaskClusterOperations) ensureServiceAccount(name string) *ServiceAccount {
+	if sa, ok := o.state.ServiceAccounts[name]; ok {
+		return sa
+	}
+
+	sa := &ServiceAccount{}
+	o.state.ServiceAccounts[name] = sa
+	return sa
+}
+
+func (o *TaskClusterOperations) ensurePostgresAccess(ctx context.Context, name string) error {
+	sa := o.ensureServiceAccount(name)
+
+	username := o.source.Spec.PostgresUserPrefix
+	if name != "" {
+		username = fmt.Sprintf("%s_%s", username, name)
+	}
+
+	if sa.PostgresPassword == "" {
+		sa.PostgresPassword = pwgen.AlphaNumeric(20)
+	}
+
+	db, err := o.connectToPostgres(ctx)
+	if err != nil {
+			  return err
+			  }
+
+	rows, err := db.Query(ctx, "SELECT 1 from pg_roles WHERE rolname=$1", pgx.QuerySimpleProtocol(true), username)
+	if err != nil {
+			  return fmt.Errorf("error checking postgres user: %w", err)
+			  }
+
+	usernameSafe := pgx.Identifier{username}.Sanitize()
+	sql := ""
+	if rows.Next() {
+		sql = fmt.Sprintf("ALTER USER %s WITH PASSWORD $1", usernameSafe)
+	} else {
+		sql = fmt.Sprintf("CREATE USER %s WITH PASSWORD $1", usernameSafe)
+	}
+	rows.Close()
+
+	if _, err := db.Exec(ctx, sql, pgx.QuerySimpleProtocol(true), sa.PostgresPassword); err != nil {
+			return err
+		}
+
+	return nil
+}
+
+func (o *TaskClusterOperations) getPostgresAccess(name string) PostgresAccess {
+	sa := o.ensureServiceAccount(name)
+	db := o.dbInfo
+
+	username := o.source.Spec.PostgresUserPrefix
+	if name != "" {
+		username = fmt.Sprintf("%s_%s", username, name)
+	}
+
+	db.Username = username
+	db.Password = sa.PostgresPassword
+	url := db.ConnectionString(true)
+	return PostgresAccess{
+		ReadDBURL:  url,
+		WriteDBURL: url,
+	}
+}
+
+func (o *TaskClusterOperations) ensurePulseAccess(ctx context.Context, name string) error {
+	sa := o.ensureServiceAccount(name)
+
+	dashName := strings.Replace(name, "_", "-", -1)
+	username := fmt.Sprintf("%s-taskcluster-%s", o.source.Spec.Pulse.Vhost, dashName)
+
+	if sa.PulsePassword == "" {
+		sa.PulsePassword = pwgen.AlphaNumeric(20)
+	}
+
+	pulse, err := o.connectToPulse(ctx)
+	if err != nil {
+		return err
+	}
+
+	_, err = pulse.PutUser(username, rabbithole.UserSettings{
+		Name:     username,
+		Tags:     "",
+		Password: sa.PulsePassword,
+	})
+	if err != nil {
+		return err
+	}
+
+	_, err = pulse.UpdatePermissionsIn(o.source.Spec.Pulse.Vhost, username, rabbithole.Permissions{
+		Configure: ".*",
+		Write:     ".*",
+		Read:      ".*",
+	})
+
+	return err
+}
+
+func (o *TaskClusterOperations) getPulseAccess(name string) PulseAccess {
+	sa := o.ensureServiceAccount(name)
+
+	dashName := strings.Replace(name, "_", "-", -1)
+	username := fmt.Sprintf("%s-taskcluster-%s", o.source.Spec.Pulse.Vhost, dashName)
+
+	return PulseAccess{
+		PulseUsername: username,
+		PulsePassword: sa.PulsePassword,
+	}
+}
+
+func (o *TaskClusterOperations) ensureAccessToken(name string) {
+	sa := o.ensureServiceAccount(name)
+
+	if sa.AccessToken == "" {
+		sa.AccessToken = "TC" + pwgen.AlphaNumeric(22)
+	}
+}
+
+func (o *TaskClusterOperations) getTaskClusterAccess(name string) TaskClusterAccess {
+	sa := o.ensureServiceAccount(name)
+
+	return TaskClusterAccess{
+		AccessToken: sa.AccessToken,
+	}
+}
+
+func (o *TaskClusterOperations) getStaticAccessToken(name string) taskclusterv1beta1.StaticAccessToken {
+	sa := o.ensureServiceAccount(name)
+	clientID := fmt.Sprintf("static/taskcluster/%s", strings.Replace(name, "_", "-", -1))
+
+	return taskclusterv1beta1.StaticAccessToken{
+		ClientID:    clientID,
+		AccessToken: sa.AccessToken,
+	}
+}
+
+func (o *TaskClusterOperations) ensureCrypto(name string) {
+	sa := o.ensureServiceAccount(name)
+
+	if sa.AzureCryptoKey != "" {
+		return
+	}
+
+	rawKey := pwgen.AlphaNumeric(32)
+	sa.AzureCryptoKey = base64.StdEncoding.EncodeToString([]byte(rawKey))
+	sa.AzureSigningKey = pwgen.AlphaNumeric(44)
+}
+
+func (o *TaskClusterOperations) getCrypto(name string) AzureSigningConfig {
+	return o.ensureServiceAccount(name).AzureSigningConfig
+}

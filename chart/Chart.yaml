@@ -1,0 +1,10 @@
+name: taskcluster
+appVersion: '30.0.2'
+description:  Framework that supports Mozilla's continuous integration and release processes.
+version: 0.1.0
+keywords:
+  - ci
+  - ci-framework
+sources:
+  - https://github.com/taskcluster/taskcluster
+icon: https://media.taskcluster.net/logo/logo.png

@@ -1,0 +1,7 @@
+apiVersion: taskcluster.wellplayed.games/v1beta1
+kind: WebSockTunnel
+metadata:
+  name: websocktunnel-sample
+spec:
+  # Add fields here
+  foo: bar

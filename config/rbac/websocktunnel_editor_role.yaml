@@ -1,0 +1,24 @@
+# permissions for end users to edit websocktunnels.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: websocktunnel-editor-role
+rules:
+- apiGroups:
+  - taskcluster.wellplayed.games
+  resources:
+  - websocktunnels
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - taskcluster.wellplayed.games
+  resources:
+  - websocktunnels/status
+  verbs:
+  - get

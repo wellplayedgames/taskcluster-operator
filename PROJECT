@@ -1,0 +1,10 @@
+domain: wellplayed.games
+repo: github.com/wellplayedgames/taskcluster-operator
+resources:
+- group: taskcluster
+  kind: Instance
+  version: v1beta1
+- group: taskcluster
+  kind: WebSockTunnel
+  version: v1beta1
+version: "2"
