@@ -12,12 +12,61 @@ import (
 	certmanagerv1alpha2 "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1alpha2"
 	taskclusterv1beta1 "github.com/wellplayedgames/taskcluster-operator/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
-	networkingv1beta1 "k8s.io/api/networking/v1beta1"
 )
 
 const (
 	image          = "taskcluster/websocktunnel"
 	defaultVersion = "30.0.2"
+
+	envoyConfig = `
+admin:
+  access_log_path: /dev/stdout
+  address:
+    socket_address: { address: 0.0.0.0, port_value: 9901 }
+
+static_resources:
+  secrets:
+  - name: server_cert
+    tls_certificate:
+      certificate_chain:
+        filename: /tls/tls.crt
+      private_key:
+        filename: /tls/tls.key
+  listeners:
+  - name: listener_0
+    address:
+      socket_address: { address: 0.0.0.0, port_value: 443 }
+    filter_chains:
+    - filters:
+      - name: envoy.tcp_proxy
+        config:
+          stat_prefix: ingress_tcp
+          cluster: service
+          max_connect_attempts: 100
+          access_log:
+            - name: envoy.file_access_log
+              config:
+                path: /dev/stdout
+      tls_context:
+        common_tls_context:
+          tls_certificate_sds_secret_configs:
+          - name: server_cert
+  clusters:
+  - name: service
+    connect_timeout: 120s
+    type: STATIC
+    dns_lookup_family: V4_ONLY
+    lb_policy: ROUND_ROBIN
+    load_assignment:
+      cluster_name: service
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: 127.0.0.1
+                port_value: 80
+`
 )
 
 type WebSockTunnelBuilder struct {
@@ -30,6 +79,8 @@ func (b *WebSockTunnelBuilder) Build() ([]runtime.Object, error) {
 	name := b.Source.Name
 	namespace := b.Source.Namespace
 	spec := &b.Source.Spec
+	tlsSecretName := fmt.Sprintf("%s-tls", name)
+	envoyConfigName := fmt.Sprintf("%s-envoy", name)
 
 	objects := []runtime.Object{
 		&certmanagerv1alpha2.Certificate{
@@ -38,9 +89,18 @@ func (b *WebSockTunnelBuilder) Build() ([]runtime.Object, error) {
 				Namespace: namespace,
 			},
 			Spec: certmanagerv1alpha2.CertificateSpec{
-				SecretName: fmt.Sprintf("%s-tls", name),
+				SecretName: tlsSecretName,
 				DNSNames:   []string{spec.DomainName},
 				IssuerRef:  spec.CertificateIssuerRef,
+			},
+		},
+		&corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: envoyConfigName,
+				Namespace: namespace,
+			},
+			Data: map[string]string{
+				"config.yaml": envoyConfig,
 			},
 		},
 		&appsv1.Deployment{
@@ -92,7 +152,7 @@ func (b *WebSockTunnelBuilder) Build() ([]runtime.Object, error) {
 								},
 								Resources: corev1.ResourceRequirements{
 									Requests: corev1.ResourceList{
-										"cpu": *resource.NewMilliQuantity(10, resource.BinarySI),
+										corev1.ResourceCPU: *resource.NewMilliQuantity(10, resource.BinarySI),
 									},
 								},
 								ReadinessProbe: &corev1.Probe{
@@ -100,6 +160,7 @@ func (b *WebSockTunnelBuilder) Build() ([]runtime.Object, error) {
 										HTTPGet: &corev1.HTTPGetAction{
 											Path: "/__lbheartbeat__",
 											Port: intstr.FromInt(80),
+											Scheme: corev1.URISchemeHTTP,
 										},
 									},
 									InitialDelaySeconds: 3,
@@ -110,10 +171,53 @@ func (b *WebSockTunnelBuilder) Build() ([]runtime.Object, error) {
 										HTTPGet: &corev1.HTTPGetAction{
 											Path: "/__lbheartbeat__",
 											Port: intstr.FromInt(80),
+											Scheme: corev1.URISchemeHTTP,
 										},
 									},
 									InitialDelaySeconds: 30,
 									PeriodSeconds:       3,
+								},
+							},
+							{
+								Name: "tls-terminate",
+								Image: "envoyproxy/envoy:v1.11.1",
+								Args: []string{"-c", "/etc/envoy/config.yaml"},
+								VolumeMounts: []corev1.VolumeMount{
+									{
+										Name: "tls",
+										MountPath: "/tls",
+										ReadOnly: true,
+									},
+									{
+										Name: "envoy-config",
+										MountPath: "/etc/envoy",
+										ReadOnly: true,
+									},
+								},
+								Resources: corev1.ResourceRequirements{
+									Requests: corev1.ResourceList{
+										corev1.ResourceCPU: *resource.NewMilliQuantity(10, resource.BinarySI),
+									},
+								},
+							},
+						},
+						Volumes: []corev1.Volume{
+							{
+								Name: "tls",
+								VolumeSource: corev1.VolumeSource{
+									Secret: &corev1.SecretVolumeSource{
+										SecretName:  tlsSecretName,
+									},
+								},
+							},
+							{
+								Name: "envoy-config",
+								VolumeSource: corev1.VolumeSource{
+									ConfigMap: &corev1.ConfigMapVolumeSource{
+										LocalObjectReference: corev1.LocalObjectReference{
+											Name: envoyConfigName,
+										},
+									},
 								},
 							},
 						},
@@ -129,54 +233,22 @@ func (b *WebSockTunnelBuilder) Build() ([]runtime.Object, error) {
 					"app.kubernetes.io/component": "websocktunnel",
 					"app.kubernetes.io/name":      name,
 				},
+				Annotations: map[string]string{
+					"external-dns.alpha.kubernetes.io/hostname": spec.DomainName,
+				},
 			},
 			Spec: corev1.ServiceSpec{
-				Type: corev1.ServiceTypeNodePort,
+				Type: corev1.ServiceTypeLoadBalancer,
 				Selector: map[string]string{
 					"app.kubernetes.io/component": "websocktunnel",
 					"app.kubernetes.io/name":      name,
 				},
 				Ports: []corev1.ServicePort{
 					{
-						Name:       "http",
+						Name:       "https",
 						Protocol:   corev1.ProtocolTCP,
-						Port:       80,
-						TargetPort: intstr.FromInt(80),
-					},
-				},
-			},
-		},
-		&networkingv1beta1.Ingress{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: name,
-				Namespace: namespace,
-				Annotations: map[string]string{
-					"kubernetes.io/ingress.allow-http": "false",
-				},
-			},
-			Spec: networkingv1beta1.IngressSpec{
-				TLS: []networkingv1beta1.IngressTLS{
-					{
-						Hosts:      []string{spec.DomainName},
-						SecretName: fmt.Sprintf("%s-tls", name),
-					},
-				},
-				Rules: []networkingv1beta1.IngressRule{
-					{
-						Host: spec.DomainName,
-						IngressRuleValue: networkingv1beta1.IngressRuleValue{
-							HTTP: &networkingv1beta1.HTTPIngressRuleValue{
-								Paths: []networkingv1beta1.HTTPIngressPath{
-									{
-										Path: "/*",
-										Backend: networkingv1beta1.IngressBackend{
-											ServiceName: name,
-											ServicePort: intstr.FromInt(80),
-										},
-									},
-								},
-							},
-						},
+						Port:       443,
+						TargetPort: intstr.FromInt(443),
 					},
 				},
 			},
