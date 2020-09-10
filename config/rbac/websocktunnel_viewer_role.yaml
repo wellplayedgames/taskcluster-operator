@@ -1,0 +1,20 @@
+# permissions for end users to view websocktunnels.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: websocktunnel-viewer-role
+rules:
+- apiGroups:
+  - taskcluster.wellplayed.games
+  resources:
+  - websocktunnels
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - taskcluster.wellplayed.games
+  resources:
+  - websocktunnels/status
+  verbs:
+  - get
