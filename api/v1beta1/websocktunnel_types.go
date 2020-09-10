@@ -32,11 +32,39 @@ type WebSockTunnelSpec struct {
 	// TODO: Add rotation schedule here?
 }
 
+// WebSockTunnelConditionType represents the type enum of a condition.
+type WebSockTunnelConditionType string
+
+const (
+	// WebSockTunnelProgressing is used when the instance is not blocked by an
+	// external dependency or reconcile error.
+	WebSockTunnelProgressing WebSockTunnelConditionType = "Progressing"
+)
+
+// WebSockTunnelCondition represents a condition of an Instance
+type WebSockTunnelCondition struct {
+	Type   WebSockTunnelConditionType  `json:"type"`
+	Status corev1.ConditionStatus `json:"status"`
+	// Last time the condition transitioned from one status to another.
+	// +optional
+	LastTransitionTime metav1.Time `json:"lastTransitionTime,omitempty"`
+	// Unique, this should be a short, machine understandable string that gives the reason
+	// for condition's last transition. If it reports "ResizeStarted" that means the underlying
+	// persistent volume is being resized.
+	// +optional
+	Reason string `json:"reason,omitempty"`
+	// Human-readable message indicating details about last transition.
+	// +optional
+	Message string `json:"message,omitempty"`
+}
+
 // WebSockTunnelStatus defines the observed state of WebSockTunnel
 type WebSockTunnelStatus struct {
+	Conditions []WebSockTunnelCondition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
 
 // WebSockTunnel is the Schema for the websocktunnels API
 type WebSockTunnel struct {

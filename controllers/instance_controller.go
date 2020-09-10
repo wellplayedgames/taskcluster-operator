@@ -20,9 +20,12 @@ import (
 	"context"
 	"github.com/go-logr/logr"
 	"github.com/wellplayedgames/tiny-operator/pkg/composite"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"time"
 
 	taskclusterv1beta1 "github.com/wellplayedgames/taskcluster-operator/api/v1beta1"
 )
@@ -49,6 +52,44 @@ func (r *InstanceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	now := time.Now()
+	mnow := metav1.Time{Time: now}
+
+	// Configure the Progressing status condition.
+	progressing := taskclusterv1beta1.InstanceCondition{
+		Type: taskclusterv1beta1.InstanceProgressing,
+		LastTransitionTime: mnow,
+		Status: corev1.ConditionFalse,
+		Reason: "Unknown",
+	}
+	defer func() {
+		hasSet := false
+		for idx := range instance.Status.Conditions {
+			c := &instance.Status.Conditions[idx]
+			if c.Type == progressing.Type {
+				hasSet = true
+
+				if c.Status != progressing.Status {
+					c.LastTransitionTime = progressing.LastTransitionTime
+				}
+
+				c.Status = progressing.Status
+				c.Message = progressing.Message
+				c.Reason = progressing.Reason
+				break
+			}
+		}
+
+		if !hasSet {
+			instance.Status.Conditions = append(instance.Status.Conditions, progressing)
+		}
+
+		err := r.Client.Status().Update(ctx, &instance)
+		if err != nil {
+			logger.Error(err, "failed to update status")
+		}
+	}()
+
 	ops := &TaskClusterOperations{
 		Logger:         r.Log,
 		Client:         r.Client,
@@ -59,12 +100,16 @@ func (r *InstanceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	if err := ops.Prepare(ctx); err != nil {
+		progressing.Reason = "PrepareFailed"
+		progressing.Message = err.Error()
 		return ctrl.Result{}, err
 	}
 
 	r.Log.Info("Migrating state")
 
 	if err := ops.MigrateState(ctx); err != nil {
+		progressing.Reason = "MigrateFailed"
+		progressing.Message = err.Error()
 		return ctrl.Result{}, err
 	}
 
@@ -72,6 +117,8 @@ func (r *InstanceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	objects, err := ops.Build(ctx)
 	if err != nil {
+		progressing.Reason = "BuildFailed"
+		progressing.Message = err.Error()
 		return ctrl.Result{}, err
 	}
 
@@ -83,9 +130,13 @@ func (r *InstanceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		Scheme: r.Scheme,
 	}
 	if err := compReconciler.Reconcile(ctx, resourceOwner, &instance, objects, false); err != nil {
+		progressing.Reason = "CompositeReconcileFailed"
+		progressing.Message = err.Error()
 		return ctrl.Result{}, err
 	}
 
+	progressing.Status = corev1.ConditionTrue
+	progressing.Reason = "Reconciled"
 	return ctrl.Result{}, nil
 }
 

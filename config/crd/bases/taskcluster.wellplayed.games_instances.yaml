@@ -15,6 +15,8 @@ spec:
     plural: instances
     singular: instance
   scope: Namespaced
+  subresources:
+    status: {}
   validation:
     openAPIV3Schema:
       description: Instance is the Schema for the instances API
@@ -270,6 +272,41 @@ spec:
           type: object
         status:
           description: InstanceStatus defines the observed state of Instance
+          properties:
+            conditions:
+              items:
+                description: InstanceCondition represents a condition of an Instance
+                properties:
+                  lastProbeTime:
+                    description: Last time we probed the condition.
+                    format: date-time
+                    type: string
+                  lastTransitionTime:
+                    description: Last time the condition transitioned from one status
+                      to another.
+                    format: date-time
+                    type: string
+                  message:
+                    description: Human-readable message indicating details about last
+                      transition.
+                    type: string
+                  reason:
+                    description: Unique, this should be a short, machine understandable
+                      string that gives the reason for condition's last transition.
+                      If it reports "ResizeStarted" that means the underlying persistent
+                      volume is being resized.
+                    type: string
+                  status:
+                    type: string
+                  type:
+                    description: InstanceConditionType represents the type enum of
+                      a condition.
+                    type: string
+                required:
+                - status
+                - type
+                type: object
+              type: array
           type: object
       type: object
   version: v1beta1

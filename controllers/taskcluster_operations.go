@@ -571,6 +571,7 @@ func (o *TaskClusterOperations) RenderValues(ctx context.Context) (*TaskClusterV
 		values.GitHub.WebhookSecrets = webhookSecrets
 	}
 
+	// Include provided static access tokens.
 	if ref := spec.AccessTokensSecretRef; ref != nil {
 		var secret corev1.Secret
 		name := types.NamespacedName{

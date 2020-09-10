@@ -78,11 +78,39 @@ type InstanceSpec struct {
 	PostgresUserPrefix          string   `json:"postgresUserPrefix"`
 }
 
+// InstanceConditionType represents the type enum of a condition.
+type InstanceConditionType string
+
+const (
+	// InstanceProgressing is used when the instance is not blocked by an
+	// external dependency or reconcile error.
+	InstanceProgressing InstanceConditionType = "Progressing"
+)
+
+// InstanceCondition represents a condition of an Instance
+type InstanceCondition struct {
+	Type   InstanceConditionType  `json:"type"`
+	Status corev1.ConditionStatus `json:"status"`
+	// Last time the condition transitioned from one status to another.
+	// +optional
+	LastTransitionTime metav1.Time `json:"lastTransitionTime,omitempty"`
+	// Unique, this should be a short, machine understandable string that gives the reason
+	// for condition's last transition. If it reports "ResizeStarted" that means the underlying
+	// persistent volume is being resized.
+	// +optional
+	Reason string `json:"reason,omitempty"`
+	// Human-readable message indicating details about last transition.
+	// +optional
+	Message string `json:"message,omitempty"`
+}
+
 // InstanceStatus defines the observed state of Instance
 type InstanceStatus struct {
+	Conditions []InstanceCondition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
 
 // Instance is the Schema for the instances API
 type Instance struct {
