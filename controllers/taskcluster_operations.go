@@ -73,6 +73,7 @@ var (
 		"hooks",
 		"secrets",
 		"web_server",
+		"worker_manager",
 	}
 )
 
@@ -407,9 +408,9 @@ func (o *TaskClusterOperations) RenderValues(ctx context.Context) (*TaskClusterV
 
 	values := &TaskClusterValues{
 		Auth: AuthConfig{
-			PostgresAccess:  o.getPostgresAccess("auth"),
-			PulseAccess:     o.getPulseAccess("auth"),
-			CryptoConfig:    o.getCrypto("auth"),
+			PostgresAccess: o.getPostgresAccess("auth"),
+			PulseAccess:    o.getPulseAccess("auth"),
+			CryptoConfig:   o.getCrypto("auth"),
 			StaticAccounts: []taskclusterv1beta1.StaticAccessToken{
 				o.getStaticAccessToken("built_in_workers"),
 				o.getStaticAccessToken("github"),
@@ -481,6 +482,7 @@ func (o *TaskClusterOperations) RenderValues(ctx context.Context) (*TaskClusterV
 			TaskClusterAccess: o.getTaskClusterAccess("worker_manager"),
 			PostgresAccess:    o.getPostgresAccess("worker_manager"),
 			PulseAccess:       o.getPulseAccess("worker_manager"),
+			CryptoConfig:      o.getCrypto("worker_manager"),
 			Providers:         map[string]json.RawMessage{},
 		},
 		UI: UIConfig{
@@ -765,9 +767,9 @@ func (o *TaskClusterOperations) ensureCrypto(name string) {
 	if sa.AzureCryptoKey != "" {
 		id := strconv.Itoa(int(time.Now().Unix()))
 		sa.DBCryptoKeys = append(sa.DBCryptoKeys, DBCryptoKey{
-			ID: id,
+			ID:        id,
 			Algorithm: "aes-256",
-			Key: sa.AzureCryptoKey,
+			Key:       sa.AzureCryptoKey,
 		})
 		sa.AzureCryptoKey = ""
 	}
@@ -779,9 +781,9 @@ func (o *TaskClusterOperations) ensureCrypto(name string) {
 
 		sa.DBCryptoKeys = []DBCryptoKey{
 			{
-				ID: id,
+				ID:        id,
 				Algorithm: "aes-256",
-				Key: key,
+				Key:       key,
 			},
 		}
 	}

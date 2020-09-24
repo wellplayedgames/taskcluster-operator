@@ -141,6 +141,7 @@ type WorkerManagerConfig struct {
 	TaskClusterAccess
 	PostgresAccess
 	PulseAccess
+	CryptoConfig
 	Providers map[string]json.RawMessage `json:"providers"`
 }
 
