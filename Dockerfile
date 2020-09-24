@@ -19,8 +19,10 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOFLAGS=-mod=vendor GO111MODULE=on go 
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
 FROM gcr.io/distroless/static:nonroot
+ENV CHART_PATH=/chart
 WORKDIR /
 COPY --from=builder /workspace/manager .
+COPY chart/ /chart
 USER nonroot:nonroot
 
 ENTRYPOINT ["/manager"]
