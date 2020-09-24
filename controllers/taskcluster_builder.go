@@ -31,13 +31,15 @@ type PulseAccess struct {
 	PulsePassword string `json:"pulse_password"`
 }
 
-type AzureSigningConfig struct {
-	AzureSigningKey string `json:"azure_signing_key,omitempty"`
-	AzureCryptoKey  string `json:"azure_crypto_key,omitempty"`
+type DBCryptoKey struct {
+	ID        string `json:"id"`
+	Algorithm string `json:"algo"`
+	Key       string `json:"key"`
 }
 
-type AzureAccess struct {
-	AccountKey string `json:"azure_account_key"`
+type CryptoConfig struct {
+	AzureCryptoKey string        `json:"azure_crypto_key,omitempty"`
+	DBCryptoKeys   []DBCryptoKey `json:"db_crypto_keys"`
 }
 
 type AWSAccess struct {
@@ -52,10 +54,9 @@ type TaskClusterAccess struct {
 type AuthConfig struct {
 	PostgresAccess
 	PulseAccess
-	AzureSigningConfig
+	CryptoConfig
 	AzureAccounts       map[string]string                      `json:"azure_accounts"`
 	StaticAccounts      []taskclusterv1beta1.StaticAccessToken `json:"static_clients"`
-	AzureAccountKey     string                                 `json:"azure_account_key"`
 	WebSockTunnelSecret string                                 `json:"websocktunnel_secret"`
 }
 
@@ -77,7 +78,7 @@ type HooksConfig struct {
 	TaskClusterAccess
 	PostgresAccess
 	PulseAccess
-	AzureSigningConfig
+	CryptoConfig
 }
 
 type IndexConfig struct {
@@ -104,7 +105,6 @@ type QueueConfig struct {
 	PostgresAccess
 	PulseAccess
 	AWSAccess
-	AzureAccess
 	PublicArtifactBucket  string `json:"public_artifact_bucket"`
 	PrivateArtifactBucket string `json:"private_artifact_bucket"`
 	ArtifactRegion        string `json:"artifact_region"`
@@ -113,7 +113,7 @@ type QueueConfig struct {
 type SecretsConfig struct {
 	TaskClusterAccess
 	PostgresAccess
-	AzureSigningConfig
+	CryptoConfig
 }
 
 type GitHubLoginStrategy struct {
@@ -129,7 +129,7 @@ type WebServerConfig struct {
 	TaskClusterAccess
 	PostgresAccess
 	PulseAccess
-	AzureSigningConfig
+	CryptoConfig
 	PublicURL                   string                  `json:"public_url"`
 	AdditionalAllowedCORSOrigin string                  `json:"additional_allowed_cors_origin"`
 	UILoginStrategies           UILoginStrategiesConfig `json:"ui_login_strategies"`
@@ -257,7 +257,7 @@ func (o *TaskClusterOperations) createDBUpgradeJob() []runtime.Object {
 					Containers: []corev1.Container{
 						{
 							Name:  "db-upgrade",
-							Image: defaultDockerImage,
+							Image: o.dockerImage(),
 							Args:  []string{"script/db:upgrade"},
 							EnvFrom: []corev1.EnvFromSource{
 								{

@@ -15,16 +15,17 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"strconv"
 	"strings"
 	"time"
 )
 
 const (
-	defaultDockerImage = "taskcluster/taskcluster:v30.0.2"
-	stateKey           = "state"
-	fieldOwner         = "taskcluster.wellplayed.games"
+	defaultDockerRepo = "taskcluster/taskcluster"
+	defaultVersion    = "37.2.0"
+	stateKey          = "state"
+	fieldOwner        = "taskcluster.wellplayed.games"
 )
 
 var (
@@ -79,7 +80,7 @@ type ServiceAccount struct {
 	AccessToken      string `json:"accessToken,omitempty"`
 	PostgresPassword string `json:"postgresPassword,omitempty"`
 	PulsePassword    string `json:"pulsePassword,omitempty"`
-	AzureSigningConfig
+	CryptoConfig
 }
 
 type TaskClusterState struct {
@@ -331,10 +332,9 @@ func (o *TaskClusterOperations) writeState(ctx context.Context) error {
 	secret.TypeMeta.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("Secret"))
 	secret.Namespace = o.Namespace
 	secret.Name = fmt.Sprintf("%s-state", o.Name)
-	secret.Data = map[string][]byte{}
-
-	ctrl.SetControllerReference(&o.source, &secret, o.Scheme)
-	secret.Data[stateKey] = rawState
+	secret.Data = map[string][]byte{
+		stateKey: rawState,
+	}
 
 	return o.Client.Patch(ctx, &secret, client.Apply, client.ForceOwnership, client.FieldOwner(fieldOwner))
 }
@@ -384,6 +384,18 @@ func (o *TaskClusterOperations) MigrateState(ctx context.Context) error {
 	return o.writeState(ctx)
 }
 
+func (o *TaskClusterOperations) dockerImage() string {
+	src := o.source.Spec.DockerImage
+
+	if src == "" {
+		return fmt.Sprintf("%s:v%s", defaultDockerRepo, defaultVersion)
+	} else if !strings.Contains(src, ":") {
+		return fmt.Sprintf("%s:v%s", src, defaultVersion)
+	} else {
+		return src
+	}
+}
+
 func (o *TaskClusterOperations) RenderValues(ctx context.Context) (*TaskClusterValues, error) {
 	spec := &o.source.Spec
 	rootURL := spec.RootURL
@@ -393,10 +405,9 @@ func (o *TaskClusterOperations) RenderValues(ctx context.Context) (*TaskClusterV
 
 	values := &TaskClusterValues{
 		Auth: AuthConfig{
-			PostgresAccess:     o.getPostgresAccess("auth"),
-			PulseAccess:        o.getPulseAccess("auth"),
-			AzureSigningConfig: o.getCrypto("auth"),
-			AzureAccountKey:    spec.AzureAccountID,
+			PostgresAccess:  o.getPostgresAccess("auth"),
+			PulseAccess:     o.getPulseAccess("auth"),
+			CryptoConfig:    o.getCrypto("auth"),
 			StaticAccounts: []taskclusterv1beta1.StaticAccessToken{
 				o.getStaticAccessToken("built_in_workers"),
 				o.getStaticAccessToken("github"),
@@ -421,10 +432,10 @@ func (o *TaskClusterOperations) RenderValues(ctx context.Context) (*TaskClusterV
 			BotUsername:       spec.GitHub.BotUsername,
 		},
 		Hooks: HooksConfig{
-			TaskClusterAccess:  o.getTaskClusterAccess("hooks"),
-			PostgresAccess:     o.getPostgresAccess("hooks"),
-			PulseAccess:        o.getPulseAccess("hooks"),
-			AzureSigningConfig: o.getCrypto("hooks"),
+			TaskClusterAccess: o.getTaskClusterAccess("hooks"),
+			PostgresAccess:    o.getPostgresAccess("hooks"),
+			PulseAccess:       o.getPulseAccess("hooks"),
+			CryptoConfig:      o.getCrypto("hooks"),
 		},
 		Index: IndexConfig{
 			TaskClusterAccess: o.getTaskClusterAccess("index"),
@@ -450,15 +461,15 @@ func (o *TaskClusterOperations) RenderValues(ctx context.Context) (*TaskClusterV
 			ArtifactRegion:        spec.ArtifactRegion,
 		},
 		Secrets: SecretsConfig{
-			TaskClusterAccess:  o.getTaskClusterAccess("secrets"),
-			PostgresAccess:     o.getPostgresAccess("secrets"),
-			AzureSigningConfig: o.getCrypto("secrets"),
+			TaskClusterAccess: o.getTaskClusterAccess("secrets"),
+			PostgresAccess:    o.getPostgresAccess("secrets"),
+			CryptoConfig:      o.getCrypto("secrets"),
 		},
 		WebServer: WebServerConfig{
 			TaskClusterAccess:           o.getTaskClusterAccess("web_server"),
 			PostgresAccess:              o.getPostgresAccess("web_server"),
 			PulseAccess:                 o.getPulseAccess("web_server"),
-			AzureSigningConfig:          o.getCrypto("web_server"),
+			CryptoConfig:                o.getCrypto("web_server"),
 			PublicURL:                   spec.RootURL,
 			AdditionalAllowedCORSOrigin: spec.AdditionalAllowedCORSOrigin,
 			SessionSecret:               o.state.SessionSecret,
@@ -482,7 +493,7 @@ func (o *TaskClusterOperations) RenderValues(ctx context.Context) (*TaskClusterV
 		IngressExternalDNS:  spec.Ingress.ExternalDNSName,
 		PulseHostname:       spec.Pulse.Host,
 		PulseVHost:          spec.Pulse.Vhost,
-		DockerImage:         spec.DockerImage,
+		DockerImage:         o.dockerImage(),
 		AzureAccountID:      spec.AzureAccountID,
 	}
 
@@ -517,9 +528,6 @@ func (o *TaskClusterOperations) RenderValues(ctx context.Context) (*TaskClusterV
 		}
 
 		values.Auth.AzureAccounts = azureAccounts
-		accountKey := azureAccounts[spec.AzureAccountID]
-		azureAccess := AzureAccess{accountKey}
-		values.Queue.AzureAccess = azureAccess
 	}
 
 	// Fetch AWS credentials.
@@ -609,10 +617,6 @@ func (o *TaskClusterOperations) RenderValues(ctx context.Context) (*TaskClusterV
 		}
 	}
 
-	if values.DockerImage == "" {
-		values.DockerImage = defaultDockerImage
-	}
-
 	return values, nil
 }
 
@@ -640,13 +644,13 @@ func (o *TaskClusterOperations) ensurePostgresAccess(ctx context.Context, name s
 
 	db, err := o.connectToPostgres(ctx)
 	if err != nil {
-			  return err
-			  }
+		return err
+	}
 
 	rows, err := db.Query(ctx, "SELECT 1 from pg_roles WHERE rolname=$1", pgx.QuerySimpleProtocol(true), username)
 	if err != nil {
-			  return fmt.Errorf("error checking postgres user: %w", err)
-			  }
+		return fmt.Errorf("error checking postgres user: %w", err)
+	}
 
 	usernameSafe := pgx.Identifier{username}.Sanitize()
 	sql := ""
@@ -658,8 +662,8 @@ func (o *TaskClusterOperations) ensurePostgresAccess(ctx context.Context, name s
 	rows.Close()
 
 	if _, err := db.Exec(ctx, sql, pgx.QuerySimpleProtocol(true), sa.PostgresPassword); err != nil {
-			return err
-		}
+		return err
+	}
 
 	return nil
 }
@@ -757,14 +761,30 @@ func (o *TaskClusterOperations) ensureCrypto(name string) {
 	sa := o.ensureServiceAccount(name)
 
 	if sa.AzureCryptoKey != "" {
-		return
+		id := strconv.Itoa(int(time.Now().Unix()))
+		sa.DBCryptoKeys = append(sa.DBCryptoKeys, DBCryptoKey{
+			ID: id,
+			Algorithm: "aes-256",
+			Key: sa.AzureCryptoKey,
+		})
+		sa.AzureCryptoKey = ""
 	}
 
-	rawKey := pwgen.AlphaNumeric(32)
-	sa.AzureCryptoKey = base64.StdEncoding.EncodeToString([]byte(rawKey))
-	sa.AzureSigningKey = pwgen.AlphaNumeric(44)
+	if len(sa.DBCryptoKeys) < 1 {
+		id := strconv.Itoa(int(time.Now().Unix()))
+		rawKey := pwgen.AlphaNumeric(32)
+		key := base64.StdEncoding.EncodeToString([]byte(rawKey))
+
+		sa.DBCryptoKeys = []DBCryptoKey{
+			{
+				ID: id,
+				Algorithm: "aes-256",
+				Key: key,
+			},
+		}
+	}
 }
 
-func (o *TaskClusterOperations) getCrypto(name string) AzureSigningConfig {
-	return o.ensureServiceAccount(name).AzureSigningConfig
+func (o *TaskClusterOperations) getCrypto(name string) CryptoConfig {
+	return o.ensureServiceAccount(name).CryptoConfig
 }
