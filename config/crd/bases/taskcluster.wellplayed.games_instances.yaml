@@ -277,10 +277,6 @@ spec:
               items:
                 description: InstanceCondition represents a condition of an Instance
                 properties:
-                  lastProbeTime:
-                    description: Last time we probed the condition.
-                    format: date-time
-                    type: string
                   lastTransitionTime:
                     description: Last time the condition transitioned from one status
                       to another.
