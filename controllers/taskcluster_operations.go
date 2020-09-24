@@ -328,6 +328,8 @@ func (o *TaskClusterOperations) writeState(ctx context.Context) error {
 		return err
 	}
 
+	// Do not set the controller of this secret, as if the instance gets
+	// deleted, the DB will become inaccessible.
 	var secret corev1.Secret
 	secret.TypeMeta.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("Secret"))
 	secret.Namespace = o.Namespace
