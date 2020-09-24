@@ -23,59 +23,59 @@ import (
 
 // StaticAccessToken contains a taskcluster access token definition.
 type StaticAccessToken struct {
-	ClientID    string   `json:"clientId"`
-	AccessToken string   `json:"accessToken"`
+	ClientID    string   `json:"clientId,omitempty"`
+	AccessToken string   `json:"accessToken,omitempty"`
 	Description string   `json:"description,omitempty"`
 	Scopes      []string `json:"scopes,omitempty"`
 }
 
 // PulseSpec contains the pulse connection details.
 type PulseSpec struct {
-	AdminSecretRef *corev1.LocalObjectReference `json:"adminSecretRef"`
-	Host           string                       `json:"host"`
-	Vhost          string                       `json:"vhost"`
+	AdminSecretRef *corev1.LocalObjectReference `json:"adminSecretRef,omitempty"`
+	Host           string                       `json:"host,omitempty"`
+	Vhost          string                       `json:"vhost,omitempty"`
 }
 
 // GitHubSpec contains the desired GitHub integration configuration.
 type GitHubSpec struct {
-	BotUsername string                       `json:"botUsername"`
-	SecretRef   *corev1.LocalObjectReference `json:"secretRef"`
+	BotUsername string                       `json:"botUsername,omitempty"`
+	SecretRef   *corev1.LocalObjectReference `json:"secretRef,omitempty"`
 }
 
 // InstanceIngressSpec contains the desired ingress configuration.
 type InstanceIngressSpec struct {
-	StaticIPName    string                       `json:"staticIpName"`
-	ExternalDNSName string                       `json:"externalDNSName"`
-	TLSSecretRef    *corev1.LocalObjectReference `json:"tlsSecretRef"`
-	IssuerRef       corev1.ObjectReference       `json:"issuerRef"`
+	StaticIPName    string                       `json:"staticIpName,omitempty"`
+	ExternalDNSName string                       `json:"externalDNSName,omitempty"`
+	TLSSecretRef    *corev1.LocalObjectReference `json:"tlsSecretRef,omitempty"`
+	IssuerRef       corev1.ObjectReference       `json:"issuerRef,omitempty"`
 }
 
 // InstanceSpec defines the desired state of Instance
 type InstanceSpec struct {
-	WebSockTunnelSecretRef          *corev1.LocalObjectReference `json:"webSockTunnelSecretRef"`
-	AWSSecretRef                    *corev1.LocalObjectReference `json:"awsSecretRef"`
-	AzureSecretRef                  *corev1.LocalObjectReference `json:"azureSecretRef"`
-	WorkerManagerProvidersSecretRef *corev1.LocalObjectReference `json:"workerManagerProvidersSecretRef"`
-	DatabaseRef                     *corev1.LocalObjectReference `json:"databaseRef"`
-	AuthSecretRef                   *corev1.LocalObjectReference `json:"authSecretRef"`
-	AccessTokensSecretRef           *corev1.LocalObjectReference `json:"accessTokensSecretRef"`
+	WebSockTunnelSecretRef          *corev1.LocalObjectReference `json:"webSockTunnelSecretRef,omitempty"`
+	AWSSecretRef                    *corev1.LocalObjectReference `json:"awsSecretRef,omitempty"`
+	AzureSecretRef                  *corev1.LocalObjectReference `json:"azureSecretRef,omitempty"`
+	WorkerManagerProvidersSecretRef *corev1.LocalObjectReference `json:"workerManagerProvidersSecretRef,omitempty"`
+	DatabaseRef                     *corev1.LocalObjectReference `json:"databaseRef,omitempty"`
+	AuthSecretRef                   *corev1.LocalObjectReference `json:"authSecretRef,omitempty"`
+	AccessTokensSecretRef           *corev1.LocalObjectReference `json:"accessTokensSecretRef,omitempty"`
 
-	GitHub  GitHubSpec          `json:"github"`
-	Pulse   PulseSpec           `json:"pulse"`
-	Ingress InstanceIngressSpec `json:"ingress"`
+	GitHub  GitHubSpec          `json:"github,omitempty"`
+	Pulse   PulseSpec           `json:"pulse,omitempty"`
+	Ingress InstanceIngressSpec `json:"ingress,omitempty"`
 
-	RootURL                     string   `json:"rootUrl"`
-	ApplicationName             string   `json:"applicationName"`
-	BannerMessage               string   `json:"bannerMessage"`
-	EmailSourceAddress          string   `json:"emailSourceAddress"`
-	PublicArtifactBucket        string   `json:"publicArtifactBucket"`
-	PrivateArtifactBucket       string   `json:"privateArtifactBucket"`
-	ArtifactRegion              string   `json:"artifactRegion"`
-	AdditionalAllowedCORSOrigin string   `json:"additionalAllowedCorsOrigin"`
-	LoginStrategies             []string `json:"loginStrategies"`
-	AzureAccountID              string   `json:"azureAccountId"`
-	DockerImage                 string   `json:"dockerImage"`
-	PostgresUserPrefix          string   `json:"postgresUserPrefix"`
+	RootURL                     string   `json:"rootUrl,omitempty"`
+	ApplicationName             string   `json:"applicationName,omitempty"`
+	BannerMessage               string   `json:"bannerMessage,omitempty"`
+	EmailSourceAddress          string   `json:"emailSourceAddress,omitempty"`
+	PublicArtifactBucket        string   `json:"publicArtifactBucket,omitempty"`
+	PrivateArtifactBucket       string   `json:"privateArtifactBucket,omitempty"`
+	ArtifactRegion              string   `json:"artifactRegion,omitempty"`
+	AdditionalAllowedCORSOrigin string   `json:"additionalAllowedCorsOrigin,omitempty"`
+	LoginStrategies             []string `json:"loginStrategies,omitempty"`
+	AzureAccountID              string   `json:"azureAccountId,omitempty"`
+	DockerImage                 string   `json:"dockerImage,omitempty"`
+	PostgresUserPrefix          string   `json:"postgresUserPrefix,omitempty"`
 }
 
 // InstanceConditionType represents the type enum of a condition.
