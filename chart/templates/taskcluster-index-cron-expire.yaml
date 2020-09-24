@@ -8,17 +8,18 @@ metadata:
     app.kubernetes.io/component: taskcluster-index-expire
     app.kubernetes.io/part-of: taskcluster
 spec:
+  concurrencyPolicy: Forbid
   schedule: 0 0 * * *
   jobTemplate:
     metadata:
       labels: *ref_0
     spec:
+      activeDeadlineSeconds: 86340
       template:
         metadata:
           labels: *ref_0
         spec:
           restartPolicy: OnFailure
-          activeDeadlineSeconds: 86400
           containers:
             - name: taskcluster-index-expire
               image: '{{ .Values.dockerImage }}'
