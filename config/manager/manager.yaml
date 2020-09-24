@@ -27,6 +27,7 @@ spec:
         - /manager
         args:
         - --enable-leader-election
+        - --use-public-ips
         image: controller:latest
         name: manager
         resources:
