@@ -16,7 +16,6 @@ import (
 
 const (
 	image          = "taskcluster/websocktunnel"
-	defaultVersion = "30.0.2"
 
 	envoyConfig = `
 admin:

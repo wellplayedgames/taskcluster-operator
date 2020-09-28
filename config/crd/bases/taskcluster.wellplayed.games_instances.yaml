@@ -109,9 +109,6 @@ spec:
                         TODO: Add other useful fields. apiVersion, kind, uid?'
                       type: string
                   type: object
-              required:
-              - botUsername
-              - secretRef
               type: object
             ingress:
               description: InstanceIngressSpec contains the desired ingress configuration.
@@ -189,11 +186,6 @@ spec:
                         TODO: Add other useful fields. apiVersion, kind, uid?'
                       type: string
                   type: object
-              required:
-              - externalDNSName
-              - issuerRef
-              - staticIpName
-              - tlsSecretRef
               type: object
             loginStrategies:
               items:
@@ -221,10 +213,6 @@ spec:
                   type: string
                 vhost:
                   type: string
-              required:
-              - adminSecretRef
-              - host
-              - vhost
               type: object
             rootUrl:
               type: string
@@ -246,29 +234,6 @@ spec:
                     TODO: Add other useful fields. apiVersion, kind, uid?'
                   type: string
               type: object
-          required:
-          - accessTokensSecretRef
-          - additionalAllowedCorsOrigin
-          - applicationName
-          - artifactRegion
-          - authSecretRef
-          - awsSecretRef
-          - azureAccountId
-          - azureSecretRef
-          - bannerMessage
-          - databaseRef
-          - dockerImage
-          - emailSourceAddress
-          - github
-          - ingress
-          - loginStrategies
-          - postgresUserPrefix
-          - privateArtifactBucket
-          - publicArtifactBucket
-          - pulse
-          - rootUrl
-          - webSockTunnelSecretRef
-          - workerManagerProvidersSecretRef
           type: object
         status:
           description: InstanceStatus defines the observed state of Instance
@@ -277,10 +242,6 @@ spec:
               items:
                 description: InstanceCondition represents a condition of an Instance
                 properties:
-                  lastProbeTime:
-                    description: Last time we probed the condition.
-                    format: date-time
-                    type: string
                   lastTransitionTime:
                     description: Last time the condition transitioned from one status
                       to another.
