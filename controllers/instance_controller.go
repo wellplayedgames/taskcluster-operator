@@ -42,6 +42,13 @@ type InstanceReconciler struct {
 
 // +kubebuilder:rbac:groups=taskcluster.wellplayed.games,resources=instances,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=taskcluster.wellplayed.games,resources=instances/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups="",resources=configmaps;secrets;services;serviceaccounts,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=batch,resources=jobs;cronjobs,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles;rolebindings,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=cert-manager.io,resources=certificates,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=extensions,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=sql.cnrm.cloud.google.com,resources=sqlinstances;sqldatabases,verbs=get;list;watch
 
 func (r *InstanceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
