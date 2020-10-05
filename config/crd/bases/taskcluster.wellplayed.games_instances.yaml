@@ -187,10 +187,27 @@ spec:
                       type: string
                   type: object
               type: object
+            ircSecretRef:
+              description: Notifications backends
+              properties:
+                name:
+                  description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    TODO: Add other useful fields. apiVersion, kind, uid?'
+                  type: string
+              type: object
             loginStrategies:
               items:
                 type: string
               type: array
+            matrixSecretRef:
+              description: LocalObjectReference contains enough information to let
+                you locate the referenced object inside the same namespace.
+              properties:
+                name:
+                  description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    TODO: Add other useful fields. apiVersion, kind, uid?'
+                  type: string
+              type: object
             postgresUserPrefix:
               type: string
             privateArtifactBucket:
@@ -216,6 +233,15 @@ spec:
               type: object
             rootUrl:
               type: string
+            slackSecretRef:
+              description: LocalObjectReference contains enough information to let
+                you locate the referenced object inside the same namespace.
+              properties:
+                name:
+                  description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    TODO: Add other useful fields. apiVersion, kind, uid?'
+                  type: string
+              type: object
             webSockTunnelSecretRef:
               description: LocalObjectReference contains enough information to let
                 you locate the referenced object inside the same namespace.

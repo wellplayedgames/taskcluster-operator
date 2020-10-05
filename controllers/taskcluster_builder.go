@@ -87,11 +87,35 @@ type IndexConfig struct {
 	PulseAccess
 }
 
+type IRCConfig struct {
+	Debug    bool   `json:"irc_debug,omitempty"`
+	Nick     string `json:"irc_nick,omitempty"`
+	Password string `json:"irc_password,omitempty"`
+	Port     string `json:"irc_port,omitempty"`
+	RealName string `json:"irc_real_name,omitempty"`
+	Server   string `json:"irc_server,omitempty"`
+	UserName string `json:"irc_user_name,omitempty"`
+}
+
+type MatrixConfig struct {
+	AccessToken string `json:"matrix_access_token,omitempty"`
+	BaseURL     string `json:"matrix_base_url,omitempty"`
+	UserID      string `json:"matrix_user_id,omitempty"`
+}
+
+type SlackConfig struct {
+	APIURL      string `json:"slack_api_url,omitempty"`
+	AccessToken string `json:"slack_access_token,omitempty"`
+}
+
 type NotifyConfig struct {
 	TaskClusterAccess
 	PostgresAccess
 	PulseAccess
 	AWSAccess
+	IRCConfig
+	MatrixConfig
+	SlackConfig
 	EmailSourceAddress string `json:"email_source_address"`
 }
 
@@ -291,7 +315,6 @@ func (o *TaskClusterOperations) patchResources(objects []runtime.Object) {
 	// Make CronJobs replace.
 	for _, obj := range objects {
 		if job, ok := obj.(*batchv1beta1.CronJob); ok {
-			job.Spec.ConcurrencyPolicy = batchv1beta1.ReplaceConcurrent
 			meta := &job.Spec.JobTemplate.Spec.Template.ObjectMeta
 			if meta.Annotations == nil {
 				meta.Annotations = map[string]string{}
@@ -301,13 +324,19 @@ func (o *TaskClusterOperations) patchResources(objects []runtime.Object) {
 		}
 
 		if job, ok := obj.(*batchv2alpha1.CronJob); ok {
-			job.Spec.ConcurrencyPolicy = batchv2alpha1.ReplaceConcurrent
 			meta := &job.Spec.JobTemplate.Spec.Template.ObjectMeta
 			if meta.Annotations == nil {
 				meta.Annotations = map[string]string{}
 			}
 
 			meta.Annotations["hive.wellplayed.games/enabled"] = "false"
+		}
+
+		if deployment, ok := obj.(*appsv1.Deployment); ok {
+			if o.source.Spec.IRCSecretRef == nil && deployment.Name == "taskcluster-notify-irc" {
+				numReplicas := int32(0)
+				deployment.Spec.Replicas = &numReplicas
+			}
 		}
 
 		// Enable cert-manager on ingress.
