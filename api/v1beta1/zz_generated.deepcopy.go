@@ -179,6 +179,21 @@ func (in *InstanceSpec) DeepCopyInto(out *InstanceSpec) {
 		*out = new(v1.LocalObjectReference)
 		**out = **in
 	}
+	if in.IRCSecretRef != nil {
+		in, out := &in.IRCSecretRef, &out.IRCSecretRef
+		*out = new(v1.LocalObjectReference)
+		**out = **in
+	}
+	if in.MatrixSecretRef != nil {
+		in, out := &in.MatrixSecretRef, &out.MatrixSecretRef
+		*out = new(v1.LocalObjectReference)
+		**out = **in
+	}
+	if in.SlackSecretRef != nil {
+		in, out := &in.SlackSecretRef, &out.SlackSecretRef
+		*out = new(v1.LocalObjectReference)
+		**out = **in
+	}
 	in.GitHub.DeepCopyInto(&out.GitHub)
 	in.Pulse.DeepCopyInto(&out.Pulse)
 	in.Ingress.DeepCopyInto(&out.Ingress)
