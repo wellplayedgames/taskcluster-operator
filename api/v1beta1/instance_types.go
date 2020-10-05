@@ -60,6 +60,11 @@ type InstanceSpec struct {
 	AuthSecretRef                   *corev1.LocalObjectReference `json:"authSecretRef,omitempty"`
 	AccessTokensSecretRef           *corev1.LocalObjectReference `json:"accessTokensSecretRef,omitempty"`
 
+	// Notifications backends
+	IRCSecretRef    *corev1.LocalObjectReference `json:"ircSecretRef,omitempty"`
+	MatrixSecretRef *corev1.LocalObjectReference `json:"matrixSecretRef,omitempty"`
+	SlackSecretRef  *corev1.LocalObjectReference `json:"slackSecretRef,omitempty"`
+
 	GitHub  GitHubSpec          `json:"github,omitempty"`
 	Pulse   PulseSpec           `json:"pulse,omitempty"`
 	Ingress InstanceIngressSpec `json:"ingress,omitempty"`

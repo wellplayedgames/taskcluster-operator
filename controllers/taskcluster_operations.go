@@ -583,6 +583,63 @@ func (o *TaskClusterOperations) RenderValues(ctx context.Context) (*TaskClusterV
 		values.GitHub.WebhookSecrets = webhookSecrets
 	}
 
+	// Add IRC settings
+	if ref := spec.IRCSecretRef; ref != nil {
+		var secret corev1.Secret
+		name := types.NamespacedName{
+			Namespace: o.Namespace,
+			Name:      ref.Name,
+		}
+		if err := o.Client.Get(ctx, name, &secret); err != nil {
+			return nil, err
+		}
+
+		values.Notify.IRCConfig = IRCConfig{
+			Debug:    len(secret.Data["debug"]) > 0,
+			Nick:     string(secret.Data["nick"]),
+			Password: string(secret.Data["password"]),
+			Port:     string(secret.Data["port"]),
+			RealName: string(secret.Data["real-name"]),
+			Server:   string(secret.Data["server"]),
+			UserName: string(secret.Data["username"]),
+		}
+	}
+
+	// Add Matrix settings
+	if ref := spec.MatrixSecretRef; ref != nil {
+		var secret corev1.Secret
+		name := types.NamespacedName{
+			Namespace: o.Namespace,
+			Name:      ref.Name,
+		}
+		if err := o.Client.Get(ctx, name, &secret); err != nil {
+			return nil, err
+		}
+
+		values.Notify.MatrixConfig = MatrixConfig{
+			AccessToken: string(secret.Data["access-token"]),
+			BaseURL:     string(secret.Data["base-url"]),
+			UserID:      string(secret.Data["user-id"]),
+		}
+	}
+
+	// Add Slack settings
+	if ref := spec.SlackSecretRef; ref != nil {
+		var secret corev1.Secret
+		name := types.NamespacedName{
+			Namespace: o.Namespace,
+			Name:      ref.Name,
+		}
+		if err := o.Client.Get(ctx, name, &secret); err != nil {
+			return nil, err
+		}
+
+		values.Notify.SlackConfig = SlackConfig{
+			APIURL:      string(secret.Data["api-url"]),
+			AccessToken: string(secret.Data["access-token"]),
+		}
+	}
+
 	// Include provided static access tokens.
 	if ref := spec.AccessTokensSecretRef; ref != nil {
 		var secret corev1.Secret
