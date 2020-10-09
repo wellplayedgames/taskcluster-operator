@@ -365,11 +365,13 @@ func (o *TaskClusterOperations) migrateAccessTokenResources(ctx context.Context)
 		}
 
 		needsUpdate := false
+		needsCreate := false
 
 		var secret corev1.Secret
 		err := o.Client.Get(ctx, accessTokenName, &secret)
 		if apierrors.IsNotFound(err) {
 			needsUpdate = true
+			needsCreate = true
 
 			secret.Namespace = accessToken.Namespace
 			secret.Name = accessToken.Name
@@ -385,7 +387,7 @@ func (o *TaskClusterOperations) migrateAccessTokenResources(ctx context.Context)
 		oldClientID := string(secret.Data["client-id"])
 		accessTokenStr := string(secret.Data["access-token"])
 
-		if oldClientID != accessToken.Spec.ClientID {
+		if !needsUpdate && (oldClientID != accessToken.Spec.ClientID) {
 			needsUpdate = true
 		}
 
@@ -394,8 +396,14 @@ func (o *TaskClusterOperations) migrateAccessTokenResources(ctx context.Context)
 			secret.Data["client-id"] = []byte(accessToken.Spec.ClientID)
 			secret.Data["access-token"] = []byte(accessTokenStr)
 
-			if err := o.Client.Update(ctx, &secret); err != nil {
-				return err
+			if needsCreate {
+				if err := o.Client.Create(ctx, &secret); err != nil {
+					return err
+				}
+			} else {
+				if err := o.Client.Update(ctx, &secret); err != nil {
+					return err
+				}
 			}
 		}
 
