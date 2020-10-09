@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	image          = "taskcluster/websocktunnel"
+	image = "taskcluster/websocktunnel"
 
 	envoyConfig = `
 admin:
@@ -84,7 +84,7 @@ func (b *WebSockTunnelBuilder) Build() ([]runtime.Object, error) {
 	objects := []runtime.Object{
 		&certmanagerv1alpha2.Certificate{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: name,
+				Name:      name,
 				Namespace: namespace,
 			},
 			Spec: certmanagerv1alpha2.CertificateSpec{
@@ -95,7 +95,7 @@ func (b *WebSockTunnelBuilder) Build() ([]runtime.Object, error) {
 		},
 		&corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: envoyConfigName,
+				Name:      envoyConfigName,
 				Namespace: namespace,
 			},
 			Data: map[string]string{
@@ -104,7 +104,7 @@ func (b *WebSockTunnelBuilder) Build() ([]runtime.Object, error) {
 		},
 		&appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: name,
+				Name:      name,
 				Namespace: namespace,
 			},
 			Spec: appsv1.DeploymentSpec{
@@ -157,8 +157,8 @@ func (b *WebSockTunnelBuilder) Build() ([]runtime.Object, error) {
 								ReadinessProbe: &corev1.Probe{
 									Handler: corev1.Handler{
 										HTTPGet: &corev1.HTTPGetAction{
-											Path: "/__lbheartbeat__",
-											Port: intstr.FromInt(80),
+											Path:   "/__lbheartbeat__",
+											Port:   intstr.FromInt(80),
 											Scheme: corev1.URISchemeHTTP,
 										},
 									},
@@ -168,8 +168,8 @@ func (b *WebSockTunnelBuilder) Build() ([]runtime.Object, error) {
 								LivenessProbe: &corev1.Probe{
 									Handler: corev1.Handler{
 										HTTPGet: &corev1.HTTPGetAction{
-											Path: "/__lbheartbeat__",
-											Port: intstr.FromInt(80),
+											Path:   "/__lbheartbeat__",
+											Port:   intstr.FromInt(80),
 											Scheme: corev1.URISchemeHTTP,
 										},
 									},
@@ -178,19 +178,19 @@ func (b *WebSockTunnelBuilder) Build() ([]runtime.Object, error) {
 								},
 							},
 							{
-								Name: "tls-terminate",
+								Name:  "tls-terminate",
 								Image: "envoyproxy/envoy:v1.11.1",
-								Args: []string{"-c", "/etc/envoy/config.yaml"},
+								Args:  []string{"-c", "/etc/envoy/config.yaml"},
 								VolumeMounts: []corev1.VolumeMount{
 									{
-										Name: "tls",
+										Name:      "tls",
 										MountPath: "/tls",
-										ReadOnly: true,
+										ReadOnly:  true,
 									},
 									{
-										Name: "envoy-config",
+										Name:      "envoy-config",
 										MountPath: "/etc/envoy",
-										ReadOnly: true,
+										ReadOnly:  true,
 									},
 								},
 								Resources: corev1.ResourceRequirements{
@@ -205,7 +205,7 @@ func (b *WebSockTunnelBuilder) Build() ([]runtime.Object, error) {
 								Name: "tls",
 								VolumeSource: corev1.VolumeSource{
 									Secret: &corev1.SecretVolumeSource{
-										SecretName:  tlsSecretName,
+										SecretName: tlsSecretName,
 									},
 								},
 							},
@@ -226,7 +226,7 @@ func (b *WebSockTunnelBuilder) Build() ([]runtime.Object, error) {
 		},
 		&corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: name,
+				Name:      name,
 				Namespace: namespace,
 				Labels: map[string]string{
 					"app.kubernetes.io/component": "websocktunnel",

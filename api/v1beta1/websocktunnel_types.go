@@ -43,8 +43,8 @@ const (
 
 // WebSockTunnelCondition represents a condition of an Instance
 type WebSockTunnelCondition struct {
-	Type   WebSockTunnelConditionType  `json:"type"`
-	Status corev1.ConditionStatus `json:"status"`
+	Type   WebSockTunnelConditionType `json:"type"`
+	Status corev1.ConditionStatus     `json:"status"`
 	// Last time the condition transitioned from one status to another.
 	// +optional
 	LastTransitionTime metav1.Time `json:"lastTransitionTime,omitempty"`

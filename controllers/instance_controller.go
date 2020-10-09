@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 	"time"
 
 	taskclusterv1beta1 "github.com/wellplayedgames/taskcluster-operator/api/v1beta1"
@@ -64,10 +65,10 @@ func (r *InstanceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	// Configure the Progressing status condition.
 	progressing := taskclusterv1beta1.InstanceCondition{
-		Type: taskclusterv1beta1.InstanceProgressing,
+		Type:               taskclusterv1beta1.InstanceProgressing,
 		LastTransitionTime: mnow,
-		Status: corev1.ConditionFalse,
-		Reason: "Unknown",
+		Status:             corev1.ConditionFalse,
+		Reason:             "Unknown",
 	}
 	defer func() {
 		hasSet := false
@@ -150,5 +151,6 @@ func (r *InstanceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 func (r *InstanceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&taskclusterv1beta1.Instance{}).
+		Watches(&source.Kind{Type: &taskclusterv1beta1.AccessToken{}}, &enqueueRequestForInstance{}).
 		Complete(r)
 }

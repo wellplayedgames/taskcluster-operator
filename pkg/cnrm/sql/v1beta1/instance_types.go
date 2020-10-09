@@ -17,7 +17,7 @@ type SQLInstanceSpec struct {
 
 // SQLInstanceStatus defines the observed state of Instance
 type SQLInstanceStatus struct {
-	PublicIPAddress string `json:"publicIpAddress,omitempty"`
+	PublicIPAddress  string `json:"publicIpAddress,omitempty"`
 	PrivateIPAddress string `json:"privateIpAddress,omitempty"`
 }
 

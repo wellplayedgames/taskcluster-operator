@@ -13,9 +13,11 @@ import (
 	"github.com/wellplayedgames/taskcluster-operator/pkg/pwgen"
 	"github.com/wellplayedgames/tiny-operator/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"strconv"
 	"strings"
 	"time"
@@ -121,6 +123,8 @@ type TaskClusterOperations struct {
 	dbInfo PostgresDatabase
 	db     *pgx.Conn
 	pulse  *rabbithole.Client
+
+	accessTokenObjects []taskclusterv1beta1.StaticAccessToken
 }
 
 func (o *TaskClusterOperations) Prepare(ctx context.Context) error {
@@ -342,6 +346,76 @@ func (o *TaskClusterOperations) writeState(ctx context.Context) error {
 	return o.Client.Patch(ctx, &secret, client.Apply, client.ForceOwnership, client.FieldOwner(fieldOwner))
 }
 
+func (o *TaskClusterOperations) migrateAccessTokenResources(ctx context.Context) error {
+	instanceName := types.NamespacedName{
+		Namespace: o.source.Namespace,
+		Name:      o.source.Name,
+	}
+
+	var accessTokens taskclusterv1beta1.AccessTokenList
+	if err := o.Client.List(ctx, &accessTokens, client.MatchingFields{fieldInstanceRef: instanceName.String()}); err != nil {
+		return err
+	}
+
+	for idx := range accessTokens.Items {
+		accessToken := &accessTokens.Items[idx]
+		accessTokenName := types.NamespacedName{
+			Namespace: accessToken.Namespace,
+			Name:      accessToken.Name,
+		}
+
+		needsUpdate := false
+
+		var secret corev1.Secret
+		err := o.Client.Get(ctx, accessTokenName, &secret)
+		if apierrors.IsNotFound(err) {
+			needsUpdate = true
+
+			if err := controllerutil.SetControllerReference(accessToken, &secret, o.Scheme); err != nil {
+				return err
+			}
+
+			secret.Namespace = accessToken.Namespace
+			secret.Name = accessToken.Name
+			secret.Data = map[string][]byte{}
+		} else if err != nil {
+			return err
+		}
+
+		oldClientID := string(secret.Data["client-id"])
+		accessTokenStr := string(secret.Data["access-token"])
+
+		if oldClientID != accessToken.Spec.ClientID {
+			needsUpdate = true
+		}
+
+		if needsUpdate {
+			accessTokenStr = pwgen.AlphaNumeric(30)
+			secret.Data["client-id"] = []byte(accessToken.Spec.ClientID)
+			secret.Data["access-token"] = []byte(accessTokenStr)
+
+			if err := o.Client.Update(ctx, &secret); err != nil {
+				return err
+			}
+		}
+
+		accessToken.Status.Created = true
+		accessToken.Status.ObservedGeneration = &accessToken.Generation
+		if err := o.Client.Update(ctx, accessToken); err != nil {
+			return err
+		}
+
+		o.accessTokenObjects = append(o.accessTokenObjects, taskclusterv1beta1.StaticAccessToken{
+			ClientID:    accessToken.Spec.ClientID,
+			AccessToken: accessTokenStr,
+			Description: accessToken.Spec.Description,
+			Scopes:      accessToken.Spec.Scopes,
+		})
+	}
+
+	return nil
+}
+
 func (o *TaskClusterOperations) MigrateState(ctx context.Context) error {
 	// Ensure VHost
 	pulse, err := o.connectToPulse(ctx)
@@ -384,6 +458,10 @@ func (o *TaskClusterOperations) MigrateState(ctx context.Context) error {
 		o.ensureAccessToken(svc)
 	}
 
+	if err := o.migrateAccessTokenResources(ctx); err != nil {
+		return err
+	}
+
 	return o.writeState(ctx)
 }
 
@@ -405,6 +483,7 @@ func (o *TaskClusterOperations) RenderValues(ctx context.Context) (*TaskClusterV
 	if strings.HasSuffix(rootURL, "/") {
 		rootURL = rootURL[:len(rootURL)-1]
 	}
+
 
 	values := &TaskClusterValues{
 		Auth: AuthConfig{
@@ -500,6 +579,8 @@ func (o *TaskClusterOperations) RenderValues(ctx context.Context) (*TaskClusterV
 		DockerImage:         o.dockerImage(),
 		AzureAccountID:      spec.AzureAccountID,
 	}
+
+	values.Auth.StaticAccounts = append(values.Auth.StaticAccounts, o.accessTokenObjects...)
 
 	// Fetch WST secret
 	if ref := spec.WebSockTunnelSecretRef; ref != nil {
