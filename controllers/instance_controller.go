@@ -41,7 +41,7 @@ type InstanceReconciler struct {
 	UsePublicIPs bool
 }
 
-// +kubebuilder:rbac:groups=taskcluster.wellplayed.games,resources=instances,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=taskcluster.wellplayed.games,resources=instances;accesstokens,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=taskcluster.wellplayed.games,resources=instances/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=configmaps;secrets;services;serviceaccounts,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=batch,resources=jobs;cronjobs,verbs=get;list;watch;create;update;patch;delete

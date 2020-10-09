@@ -95,6 +95,7 @@ rules:
 - apiGroups:
   - taskcluster.wellplayed.games
   resources:
+  - accesstokens
   - instances
   verbs:
   - create

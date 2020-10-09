@@ -3,5 +3,10 @@ kind: AccessToken
 metadata:
   name: accesstoken-sample
 spec:
-  # Add fields here
-  foo: bar
+  instanceRef:
+    namespace: taskcluster
+    name: taskcluster
+  clientID: static/my-sample-client
+  description: AccessToken testing
+  scopes:
+    - secrets:get:shared/*

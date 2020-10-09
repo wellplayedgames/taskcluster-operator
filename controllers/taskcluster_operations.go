@@ -484,7 +484,6 @@ func (o *TaskClusterOperations) RenderValues(ctx context.Context) (*TaskClusterV
 		rootURL = rootURL[:len(rootURL)-1]
 	}
 
-
 	values := &TaskClusterValues{
 		Auth: AuthConfig{
 			PostgresAccess: o.getPostgresAccess("auth"),

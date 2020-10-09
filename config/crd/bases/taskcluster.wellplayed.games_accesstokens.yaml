@@ -112,6 +112,7 @@ spec:
             created:
               type: boolean
             observedGeneration:
+              format: int64
               type: integer
           type: object
       type: object
