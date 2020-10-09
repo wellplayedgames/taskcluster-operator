@@ -371,13 +371,13 @@ func (o *TaskClusterOperations) migrateAccessTokenResources(ctx context.Context)
 		if apierrors.IsNotFound(err) {
 			needsUpdate = true
 
-			if err := controllerutil.SetControllerReference(accessToken, &secret, o.Scheme); err != nil {
-				return err
-			}
-
 			secret.Namespace = accessToken.Namespace
 			secret.Name = accessToken.Name
 			secret.Data = map[string][]byte{}
+
+			if err := controllerutil.SetControllerReference(accessToken, &secret, o.Scheme); err != nil {
+				return err
+			}
 		} else if err != nil {
 			return err
 		}
