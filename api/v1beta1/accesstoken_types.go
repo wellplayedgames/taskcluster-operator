@@ -37,6 +37,7 @@ type AccessTokenStatus struct {
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
 
 // AccessToken is the Schema for the accesstokens API
 type AccessToken struct {

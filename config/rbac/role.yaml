@@ -108,6 +108,7 @@ rules:
 - apiGroups:
   - taskcluster.wellplayed.games
   resources:
+  - accesstokens/status
   - instances/status
   verbs:
   - get

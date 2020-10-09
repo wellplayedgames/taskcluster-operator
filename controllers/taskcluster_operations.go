@@ -407,10 +407,15 @@ func (o *TaskClusterOperations) migrateAccessTokenResources(ctx context.Context)
 			}
 		}
 
-		accessToken.Status.Created = true
-		accessToken.Status.ObservedGeneration = &accessToken.Generation
-		if err := o.Client.Update(ctx, accessToken); err != nil {
-			return err
+		if !accessToken.Status.Created ||
+			accessToken.Status.ObservedGeneration == nil ||
+			*accessToken.Status.ObservedGeneration != accessToken.Generation {
+			accessToken.Status.Created = true
+			accessToken.Status.ObservedGeneration = &accessToken.Generation
+
+			if err := o.Client.Update(ctx, accessToken); err != nil {
+				return err
+			}
 		}
 
 		o.accessTokenObjects = append(o.accessTokenObjects, taskclusterv1beta1.StaticAccessToken{
