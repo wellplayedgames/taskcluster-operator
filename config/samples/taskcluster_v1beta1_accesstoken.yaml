@@ -1,0 +1,12 @@
+apiVersion: taskcluster.wellplayed.games/v1beta1
+kind: AccessToken
+metadata:
+  name: accesstoken-sample
+spec:
+  instanceRef:
+    namespace: taskcluster
+    name: taskcluster
+  clientID: static/my-sample-client
+  description: AccessToken testing
+  scopes:
+    - secrets:get:shared/*

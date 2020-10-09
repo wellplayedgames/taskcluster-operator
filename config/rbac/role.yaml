@@ -95,6 +95,7 @@ rules:
 - apiGroups:
   - taskcluster.wellplayed.games
   resources:
+  - accesstokens
   - instances
   verbs:
   - create
@@ -107,6 +108,7 @@ rules:
 - apiGroups:
   - taskcluster.wellplayed.games
   resources:
+  - accesstokens/status
   - instances/status
   verbs:
   - get

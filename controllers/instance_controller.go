@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 	"time"
 
 	taskclusterv1beta1 "github.com/wellplayedgames/taskcluster-operator/api/v1beta1"
@@ -40,8 +41,8 @@ type InstanceReconciler struct {
 	UsePublicIPs bool
 }
 
-// +kubebuilder:rbac:groups=taskcluster.wellplayed.games,resources=instances,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=taskcluster.wellplayed.games,resources=instances/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=taskcluster.wellplayed.games,resources=instances;accesstokens,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=taskcluster.wellplayed.games,resources=instances/status;accesstokens/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=configmaps;secrets;services;serviceaccounts,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=batch,resources=jobs;cronjobs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
@@ -64,10 +65,10 @@ func (r *InstanceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	// Configure the Progressing status condition.
 	progressing := taskclusterv1beta1.InstanceCondition{
-		Type: taskclusterv1beta1.InstanceProgressing,
+		Type:               taskclusterv1beta1.InstanceProgressing,
 		LastTransitionTime: mnow,
-		Status: corev1.ConditionFalse,
-		Reason: "Unknown",
+		Status:             corev1.ConditionFalse,
+		Reason:             "Unknown",
 	}
 	defer func() {
 		hasSet := false
@@ -150,5 +151,6 @@ func (r *InstanceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 func (r *InstanceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&taskclusterv1beta1.Instance{}).
+		Watches(&source.Kind{Type: &taskclusterv1beta1.AccessToken{}}, &enqueueRequestForInstance{}).
 		Complete(r)
 }

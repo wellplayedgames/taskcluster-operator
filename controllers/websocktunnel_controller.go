@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"github.com/wellplayedgames/taskcluster-operator/pkg/pwgen"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -36,6 +37,8 @@ import (
 
 const (
 	resourceOwner = "taskcluster.wellplayed.games"
+
+	fieldInstanceRef = ".spec.instanceRef"
 
 	keyLastRotated = "last-rotated"
 	keySecret      = "secret"
@@ -108,10 +111,10 @@ func (r *WebSockTunnelReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 
 	// Configure the Progressing status condition.
 	progressing := taskclusterv1beta1.WebSockTunnelCondition{
-		Type: taskclusterv1beta1.WebSockTunnelProgressing,
+		Type:               taskclusterv1beta1.WebSockTunnelProgressing,
 		LastTransitionTime: mnow,
-		Status: corev1.ConditionFalse,
-		Reason: "Unknown",
+		Status:             corev1.ConditionFalse,
+		Reason:             "Unknown",
 	}
 	defer func() {
 		hasSet := false
@@ -176,6 +179,16 @@ func (r *WebSockTunnelReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 }
 
 func (r *WebSockTunnelReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	ctx := context.Background()
+
+	if err := mgr.GetFieldIndexer().IndexField(ctx, &taskclusterv1beta1.AccessToken{}, fieldInstanceRef, func(obj runtime.Object) []string {
+		token := obj.(*taskclusterv1beta1.AccessToken)
+		instance := fmt.Sprintf("%s/%s", token.Spec.InstanceRef.Namespace, token.Spec.InstanceRef.Name)
+		return []string{instance}
+	}); err != nil {
+		return err
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&taskclusterv1beta1.WebSockTunnel{}).
 		Complete(r)
