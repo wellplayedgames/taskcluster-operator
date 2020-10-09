@@ -13,45 +13,33 @@ type enqueueRequestForInstance struct{}
 
 // Create implements EventHandler
 func (e *enqueueRequestForInstance) Create(evt event.CreateEvent, q workqueue.RateLimitingInterface) {
-	for _, req := range e.getInstanceReconcileRequest(evt.Meta) {
-		q.Add(req)
-	}
+	e.addInstanceReconcileRequest(evt.Meta, q)
 }
 
 // Update implements EventHandler
 func (e *enqueueRequestForInstance) Update(evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
-	for _, req := range e.getInstanceReconcileRequest(evt.MetaOld) {
-		q.Add(req)
-	}
-	for _, req := range e.getInstanceReconcileRequest(evt.MetaNew) {
-		q.Add(req)
-	}
+	e.addInstanceReconcileRequest(evt.MetaOld, q)
+	e.addInstanceReconcileRequest(evt.MetaNew, q)
 }
 
 // Delete implements EventHandler
 func (e *enqueueRequestForInstance) Delete(evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
-	for _, req := range e.getInstanceReconcileRequest(evt.Meta) {
-		q.Add(req)
-	}
+	e.addInstanceReconcileRequest(evt.Meta, q)
 }
 
 // Generic implements EventHandler
 func (e *enqueueRequestForInstance) Generic(evt event.GenericEvent, q workqueue.RateLimitingInterface) {
-	for _, req := range e.getInstanceReconcileRequest(evt.Meta) {
-		q.Add(req)
-	}
+	e.addInstanceReconcileRequest(evt.Meta, q)
 }
 
-// getInstanceReconcileRequest returns all valid requests for clusters based on the passed-in resource.
-func (e *enqueueRequestForInstance) getInstanceReconcileRequest(object metav1.Object) (requests []reconcile.Request) {
+// addInstanceReconcileRequest returns all valid requests for clusters based on the passed-in resource.
+func (e *enqueueRequestForInstance) addInstanceReconcileRequest(object metav1.Object, q workqueue.RateLimitingInterface) {
 	if token, ok := object.(*taskclusterv1beta1.AccessToken); ok {
-		requests = append(requests, reconcile.Request{
+		q.Add(reconcile.Request{
 			NamespacedName: types.NamespacedName{
 				Namespace: token.Spec.InstanceRef.Namespace,
 				Name:      token.Spec.InstanceRef.Name,
 			},
 		})
 	}
-
-	return requests
 }
