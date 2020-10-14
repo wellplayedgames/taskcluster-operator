@@ -6,65 +6,59 @@ tasks:
   then:
     $let:
       imageName: gcr.io/wpg-internal/taskcluster-operator
+      defaults:
+        created: { $fromNow: '' }
+        deadline: { $fromNow: '3 hours' }
+        expires: { $fromNow: '10 days' }
+        provisionerId: shared
+        workerType: multistage-docker
+        scopes:
+          - secrets:get:shared/github
+          - secrets:get:shared/cloudbuild-service-account
+        metadata:
+          name: Build taskcluster-operator
+          description: Build & push taskcluster-operator
+          owner: '${event.sender.login}@users.noreply.github.com'
+          source: '${event.repository.url}'
     in:
       - $if: (tasks_for == "github-push") && (event.ref == "refs/heads/main")
         then:
-          taskId:
-            $eval: as_slugid("push_task")
-          created: { $fromNow: '' }
-          deadline: { $fromNow: '3 hours' }
-          expires: { $fromNow: '10 days' }
-          provisionerId: shared
-          workerType: multistage-docker
-          scopes:
-            - secrets:get:shared/github
-            - secrets:get:shared/cloudbuild-service-account
-          routes:
-            - notify.slack-channel.C9Z43K24F.on-any
-          payload:
-            steps:
-              $flatten:
-                - image: gcr.io/wpg-internal/ci-bootstrap
-                - image: bitnami/git
-                  command: ["/bin/bash", "-c"]
-                  args:
-                    - git clone ${event.repository.html_url} . && git checkout ${event.after}
-                - image: docker
-                  args: [ "build", ".", "-t", "${imageName}:${event.after}" ]
-                - image: docker
-                  args: [ "push", "${imageName}:${event.after}" ]
-                - image: gcr.io/wpg-internal/update-infra-image
-                  args: ["deployments/packages/_taskcluster-operator/package.json=config.imageTags.taskcluster-operator=${event.after}"]
-          metadata:
-            name: Build taskcluster-operator
-            description: Build & push taskcluster-operator
-            owner: '${event.sender.login}@users.noreply.github.com'
-            source: '${event.repository.url}'
+          $mergeDeep:
+            - { $eval: defaults }
+            - routes:
+                - notify.slack-channel.C9Z43K24F.on-any
+              extra:
+                docker:
+                  imagesPushed:
+                    - ${imageName}:${event.after}
+              payload:
+                steps:
+                  $flatten:
+                    - image: gcr.io/wpg-internal/ci-bootstrap
+                    - image: bitnami/git
+                      command: ["/bin/bash", "-c"]
+                      args:
+                        - git clone ${event.repository.html_url} . && git checkout ${event.after}
+                    - image: docker
+                      args: [ "build", ".", "-t", "${imageName}:${event.after}" ]
+                    - image: docker
+                      args: [ "push", "${imageName}:${event.after}" ]
       - $if: (tasks_for == "github-pull-request") && event["action"] in ["opened", "reopened", "synchronize"]
         then:
-          taskId:
-            $eval: as_slugid("pr_task")
-          created: { $fromNow: '' }
-          deadline: { $fromNow: '3 hours' }
-          expires: { $fromNow: '3 days' }
-          provisionerId: shared
-          workerType: multistage-docker
-          scopes:
-            - secrets:get:shared/github
-          payload:
-            steps:
-              - image: gcr.io/wpg-internal/ci-bootstrap
-              - image: bitnami/git
-                command: ["/bin/bash", "-c"]
-                args:
-                  - |
-                    git clone ${event.repository.html_url}
-                    && git checkout ${event.pull_request.head.sha}
-                    && git rebase ${event.pull_request.base.sha}
-              - image: docker
-                args: [ "build", "." ]
-          metadata:
-            name: PR test taskcluster-operator
-            description: Test taskcluster-operator for a PR
-            owner: '${event.sender.login}@users.noreply.github.com'
-            source: '${event.repository.url}'
+          $mergeDeep:
+            - { $eval: defaults }
+            - payload:
+                steps:
+                  - image: gcr.io/wpg-internal/ci-bootstrap
+                  - image: bitnami/git
+                    command: ["/bin/bash", "-c"]
+                    args:
+                      - >-
+                        git clone ${event.repository.html_url} .
+                        && git checkout ${event.pull_request.head.sha}
+                        && git rebase ${event.pull_request.base.sha}
+                  - image: docker
+                    args: [ "build", ".", "--secret" ]
+              metadata:
+                name: PR test taskcluster-operator
+                description: Test taskcluster-operator for a PR
