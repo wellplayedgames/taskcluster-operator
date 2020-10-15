@@ -1,9 +1,0 @@
-steps:
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', '$_REPO/$_IMAGE:$_TAG', '.']
-images:
-  - $_REPO/$_IMAGE:$_TAG
-substitutions:
-  _REPO: gcr.io/wpg-internal
-  _IMAGE: taskcluster-operator
-  _TAG: latest
