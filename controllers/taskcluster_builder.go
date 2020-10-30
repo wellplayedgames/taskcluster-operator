@@ -254,7 +254,7 @@ func (o *TaskClusterOperations) renderChart(values *TaskClusterValues) ([]runtim
 
 func (o *TaskClusterOperations) createDBUpgradeJob() []runtime.Object {
 	secretName := fmt.Sprintf("%s-db-admin", o.source.Name)
-	dbUrl := o.dbInfo.ConnectionString(true)
+	dbUrl := o.dbInfo.ConnectionString(true, true)
 
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
