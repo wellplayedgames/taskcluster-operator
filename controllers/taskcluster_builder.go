@@ -129,9 +129,10 @@ type QueueConfig struct {
 	PostgresAccess
 	PulseAccess
 	AWSAccess
-	PublicArtifactBucket  string `json:"public_artifact_bucket"`
-	PrivateArtifactBucket string `json:"private_artifact_bucket"`
-	ArtifactRegion        string `json:"artifact_region"`
+	PublicArtifactBucket   string `json:"public_artifact_bucket"`
+	PrivateArtifactBucket  string `json:"private_artifact_bucket"`
+	SignPublicArtifactURLs bool   `json:"sign_public_artifact_urls"`
+	ArtifactRegion         string `json:"artifact_region"`
 }
 
 type SecretsConfig struct {
