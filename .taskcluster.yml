@@ -58,7 +58,7 @@ tasks:
                         && git checkout ${event.pull_request.head.sha}
                         && git rebase ${event.pull_request.base.sha}
                   - image: docker
-                    args: [ "build", ".", "--secret" ]
+                    args: [ "build", "." ]
               metadata:
                 name: PR test taskcluster-operator
                 description: Test taskcluster-operator for a PR
