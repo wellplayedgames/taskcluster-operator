@@ -75,6 +75,7 @@ type InstanceSpec struct {
 	EmailSourceAddress          string   `json:"emailSourceAddress,omitempty"`
 	PublicArtifactBucket        string   `json:"publicArtifactBucket,omitempty"`
 	PrivateArtifactBucket       string   `json:"privateArtifactBucket,omitempty"`
+	SignPublicArtifactURLs      bool     `json:"signPublicArtifactURLs,omitempty"`
 	ArtifactRegion              string   `json:"artifactRegion,omitempty"`
 	AdditionalAllowedCORSOrigin string   `json:"additionalAllowedCorsOrigin,omitempty"`
 	LoginStrategies             []string `json:"loginStrategies,omitempty"`

@@ -25,7 +25,7 @@ import (
 
 const (
 	defaultDockerRepo = "taskcluster/taskcluster"
-	defaultVersion    = "37.3.0"
+	defaultVersion    = "38.0.1"
 	stateKey          = "state"
 	fieldOwner        = "taskcluster.wellplayed.games"
 )
@@ -100,13 +100,19 @@ type PostgresDatabase struct {
 }
 
 // ConnectionString returns an admin Postgres connection string for this database.
-func (d *PostgresDatabase) ConnectionString(public bool) string {
+func (d *PostgresDatabase) ConnectionString(public, noVerify bool) string {
 	ip := d.PrivateIP
 	if public {
 		ip = d.PublicIP
 	}
 
-	return fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=require", d.Username, d.Password, ip, d.Database)
+	params := "sslmode=require"
+	if noVerify {
+		// sslmode=verify is off since we have to pass in a CA certificate since v38
+		params = "ssl=1&sslmode=no-verify"
+	}
+
+	return fmt.Sprintf("postgres://%s:%s@%s/%s?%s", d.Username, d.Password, ip, d.Database, params)
 }
 
 type TaskClusterOperations struct {
@@ -178,7 +184,7 @@ func (o *TaskClusterOperations) connectToPostgres(ctx context.Context) (*pgx.Con
 	{
 		dbInfoWithoutDB := dbInfo
 		dbInfoWithoutDB.Database = ""
-		conn, err := pgx.Connect(ctx2, dbInfoWithoutDB.ConnectionString(o.UsePublicIPs))
+		conn, err := pgx.Connect(ctx2, dbInfoWithoutDB.ConnectionString(o.UsePublicIPs, false))
 		if err != nil {
 			return nil, err
 		}
@@ -200,7 +206,7 @@ func (o *TaskClusterOperations) connectToPostgres(ctx context.Context) (*pgx.Con
 		}
 	}
 
-	conn, err := pgx.Connect(ctx2, dbInfo.ConnectionString(o.UsePublicIPs))
+	conn, err := pgx.Connect(ctx2, dbInfo.ConnectionString(o.UsePublicIPs, false))
 	if err != nil {
 		return nil, err
 	}
@@ -547,12 +553,13 @@ func (o *TaskClusterOperations) RenderValues(ctx context.Context) (*TaskClusterV
 			PostgresAccess:    o.getPostgresAccess("purge_cache"),
 		},
 		Queue: QueueConfig{
-			TaskClusterAccess:     o.getTaskClusterAccess("queue"),
-			PostgresAccess:        o.getPostgresAccess("queue"),
-			PulseAccess:           o.getPulseAccess("queue"),
-			PublicArtifactBucket:  spec.PublicArtifactBucket,
-			PrivateArtifactBucket: spec.PrivateArtifactBucket,
-			ArtifactRegion:        spec.ArtifactRegion,
+			TaskClusterAccess:      o.getTaskClusterAccess("queue"),
+			PostgresAccess:         o.getPostgresAccess("queue"),
+			PulseAccess:            o.getPulseAccess("queue"),
+			PublicArtifactBucket:   spec.PublicArtifactBucket,
+			PrivateArtifactBucket:  spec.PrivateArtifactBucket,
+			SignPublicArtifactURLs: spec.SignPublicArtifactURLs,
+			ArtifactRegion:         spec.ArtifactRegion,
 		},
 		Secrets: SecretsConfig{
 			TaskClusterAccess: o.getTaskClusterAccess("secrets"),
@@ -833,7 +840,7 @@ func (o *TaskClusterOperations) getPostgresAccess(name string) PostgresAccess {
 
 	db.Username = username
 	db.Password = sa.PostgresPassword
-	url := db.ConnectionString(true)
+	url := db.ConnectionString(true, true)
 	return PostgresAccess{
 		ReadDBURL:  url,
 		WriteDBURL: url,
