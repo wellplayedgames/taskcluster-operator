@@ -68,10 +68,10 @@ type GitHubConfig struct {
 	TaskClusterAccess
 	PostgresAccess
 	PulseAccess
-	BotUsername      string   `json:"bot_username"`
-	GitHubPrivatePEM string   `json:"github_private_pem"`
-	GitHubAppID      string   `json:"github_app_id"`
-	WebhookSecrets   []string `json:"webhook_secret"`
+	BotUsername      string `json:"bot_username"`
+	GitHubPrivatePEM string `json:"github_private_pem"`
+	GitHubAppID      string `json:"github_app_id"`
+	WebhookSecret    string `json:"webhook_secret"`
 }
 
 type HooksConfig struct {

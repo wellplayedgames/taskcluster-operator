@@ -25,7 +25,7 @@ import (
 
 const (
 	defaultDockerRepo = "taskcluster/taskcluster"
-	defaultVersion    = "38.0.1"
+	defaultVersion    = "38.0.4"
 	stateKey          = "state"
 	fieldOwner        = "taskcluster.wellplayed.games"
 )
@@ -664,14 +664,14 @@ func (o *TaskClusterOperations) RenderValues(ctx context.Context) (*TaskClusterV
 			return nil, err
 		}
 
-		var webhookSecrets []string
+		webhookSecret := ""
 		for k, v := range secret.Data {
 			if !strings.HasPrefix("webhook-secret", k) {
 				continue
 			}
 
 			s := (string)(v)
-			webhookSecrets = append(webhookSecrets, s)
+			webhookSecret += fmt.Sprintf("'%s'", s)
 		}
 
 		values.WebServer.UILoginStrategies.GitHub = &GitHubLoginStrategy{
@@ -680,7 +680,7 @@ func (o *TaskClusterOperations) RenderValues(ctx context.Context) (*TaskClusterV
 		}
 		values.GitHub.GitHubAppID = (string)(secret.Data["app-id"])
 		values.GitHub.GitHubPrivatePEM = (string)(secret.Data["private-pem"])
-		values.GitHub.WebhookSecrets = webhookSecrets
+		values.GitHub.WebhookSecret = webhookSecret
 	}
 
 	// Add IRC settings
