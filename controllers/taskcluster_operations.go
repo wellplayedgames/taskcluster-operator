@@ -25,7 +25,7 @@ import (
 
 const (
 	defaultDockerRepo = "taskcluster/taskcluster"
-	defaultVersion    = "38.0.4"
+	defaultVersion    = "38.0.5"
 	stateKey          = "state"
 	fieldOwner        = "taskcluster.wellplayed.games"
 )
