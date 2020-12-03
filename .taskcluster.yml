@@ -1,11 +1,12 @@
 version: 1
+reporting: checks-v1
 policy:
-  pullRequests: public
+  pullRequests: collaborators
 tasks:
   $if: taskcluster_root_url == "https://taskcluster.internal.wpgapi.uk"
   then:
     $let:
-      imageName: gcr.io/wpg-internal/taskcluster-operator
+      imageName: gcr.io/wpg-internal/${event.repository.name}
       defaults:
         created: { $fromNow: '' }
         deadline: { $fromNow: '3 hours' }
@@ -16,49 +17,62 @@ tasks:
           - secrets:get:shared/github
           - secrets:get:shared/cloudbuild-service-account
         metadata:
-          name: Build taskcluster-operator
-          description: Build & push taskcluster-operator
           owner: '${event.sender.login}@users.noreply.github.com'
           source: '${event.repository.url}'
+        payload:
+          steps:
+            - image: gcr.io/wpg-internal/ci-bootstrap
     in:
-      - $if: (tasks_for == "github-push") && (event.ref == "refs/heads/main")
+      - $if: (tasks_for == "github-push") && (event.ref == "refs/heads/" + event.repository.default_branch)
         then:
           $mergeDeep:
             - { $eval: defaults }
             - routes:
-                - notify.slack-channel.C9Z43K24F.on-any
+                - notify.slack-channel.C9Z43K24F.on-running #cloud_log
+                - notify.slack-channel.C9Z43K24F.on-resolved #cloud_log
+                - index.shared.${event.repository.name}.branches.${join(split(event.ref, "refs/heads/"), "")}
               extra:
                 docker:
                   imagesPushed:
                     - ${imageName}:${event.after}
+                index:
+                  data:
+                    head:
+                      ref: ${event.ref}
+                      sha: ${event.after}
               payload:
                 steps:
-                  $flatten:
-                    - image: gcr.io/wpg-internal/ci-bootstrap
-                    - image: bitnami/git
-                      command: ["/bin/bash", "-c"]
-                      args:
-                        - git clone ${event.repository.html_url} . && git checkout ${event.after}
-                    - image: docker
-                      args: [ "build", ".", "-t", "${imageName}:${event.after}" ]
-                    - image: docker
-                      args: [ "push", "${imageName}:${event.after}" ]
+                  - image: gcr.io/wpg-internal/git-clone
+                    args:
+                      - --repo=${event.repository.html_url}
+                      - --head=${event.after}
+                  - image: docker
+                    args: [ "build", ".", "-t", "${imageName}:${event.after}" ]
+                    env:
+                      - name: DOCKER_BUILDKIT
+                        value: '1'
+                  - image: docker
+                    args: [ "push", "${imageName}:${event.after}" ]
+              metadata:
+                name: Build ${event.repository.name} at ${event.after}
+                description: |
+                  Build & push ${event.repository.name} at ${event.after} due to it being the new HEAD.
       - $if: (tasks_for == "github-pull-request") && event["action"] in ["opened", "reopened", "synchronize"]
         then:
           $mergeDeep:
             - { $eval: defaults }
             - payload:
                 steps:
-                  - image: gcr.io/wpg-internal/ci-bootstrap
-                  - image: bitnami/git
-                    command: ["/bin/bash", "-c"]
+                  - image: gcr.io/wpg-internal/git-clone
                     args:
-                      - >-
-                        git clone ${event.repository.html_url} .
-                        && git checkout ${event.pull_request.head.sha}
-                        && git rebase ${event.pull_request.base.sha}
+                      - --repo=${event.repository.html_url}
+                      - --head=${event.pull_request.head.sha}
+                      - --base=${event.pull_request.base.sha}
                   - image: docker
                     args: [ "build", "." ]
+                    env:
+                      - name: DOCKER_BUILDKIT
+                        value: '1'
               metadata:
-                name: PR test taskcluster-operator
-                description: Test taskcluster-operator for a PR
+                name: 'Test ${event.repository.name}'
+                description: 'Test ${event.repository.name} for PR #${event.pull_request.number}'

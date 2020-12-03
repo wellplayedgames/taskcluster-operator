@@ -25,7 +25,7 @@ import (
 
 const (
 	defaultDockerRepo = "taskcluster/taskcluster"
-	defaultVersion    = "38.0.6"
+	defaultVersion    = "39.0.0"
 	stateKey          = "state"
 	fieldOwner        = "taskcluster.wellplayed.games"
 )
@@ -38,6 +38,7 @@ var (
 		"hooks",
 		"index",
 		"notify",
+		"object",
 		"purge_cache",
 		"queue",
 		"secrets",
@@ -62,6 +63,7 @@ var (
 		"hooks",
 		"index",
 		"notify",
+		"object",
 		"purge_cache",
 		"queue",
 		"root",
@@ -73,6 +75,7 @@ var (
 	cryptoServices = []string{
 		"auth",
 		"hooks",
+		"object",
 		"secrets",
 		"web_server",
 		"worker_manager",
@@ -514,6 +517,7 @@ func (o *TaskClusterOperations) RenderValues(ctx context.Context) (*TaskClusterV
 				o.getStaticAccessToken("hooks"),
 				o.getStaticAccessToken("index"),
 				o.getStaticAccessToken("notify"),
+				o.getStaticAccessToken("object"),
 				o.getStaticAccessToken("purge_cache"),
 				o.getStaticAccessToken("queue"),
 				o.getStaticAccessToken("secrets"),
@@ -547,6 +551,11 @@ func (o *TaskClusterOperations) RenderValues(ctx context.Context) (*TaskClusterV
 			PostgresAccess:     o.getPostgresAccess("notify"),
 			PulseAccess:        o.getPulseAccess("notify"),
 			EmailSourceAddress: spec.EmailSourceAddress,
+		},
+		Object: ObjectConfig{
+			TaskClusterAccess: o.getTaskClusterAccess("object"),
+			PostgresAccess:    o.getPostgresAccess("object"),
+			CryptoConfig:      o.getCrypto("object"),
 		},
 		PurgeCache: PurgeCacheConfig{
 			TaskClusterAccess: o.getTaskClusterAccess("purge_cache"),
