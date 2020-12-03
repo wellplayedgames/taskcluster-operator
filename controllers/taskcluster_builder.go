@@ -119,6 +119,13 @@ type NotifyConfig struct {
 	EmailSourceAddress string `json:"email_source_address"`
 }
 
+type ObjectConfig struct {
+	TaskClusterAccess
+	PostgresAccess
+	CryptoConfig
+	// TODO: Support backends
+}
+
 type PurgeCacheConfig struct {
 	TaskClusterAccess
 	PostgresAccess
@@ -184,6 +191,7 @@ type TaskClusterValues struct {
 	Hooks          HooksConfig          `json:"hooks"`
 	Index          IndexConfig          `json:"index"`
 	Notify         NotifyConfig         `json:"notify"`
+	Object         ObjectConfig         `json:"object"`
 	PurgeCache     PurgeCacheConfig     `json:"purge_cache"`
 	Queue          QueueConfig          `json:"queue"`
 	Secrets        SecretsConfig        `json:"secrets"`
