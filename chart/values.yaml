@@ -1,4 +1,4 @@
-dockerImage: 'taskcluster/taskcluster:v38.0.6'
+dockerImage: 'taskcluster/taskcluster:v39.0.0'
 trustProxy: true
 forceSSL: false
 nodeEnv: production
@@ -91,6 +91,18 @@ notify:
       memory: 100Mi
   debug: ''
   taskcluster_client_id: static/taskcluster/notify
+  level: notice
+object:
+  procs:
+    web:
+      replicas: 0
+      cpu: 50m
+      memory: 100Mi
+    expire:
+      cpu: 50m
+      memory: 100Mi
+  debug: ''
+  taskcluster_client_id: static/taskcluster/object
   level: notice
 purge_cache:
   procs:
