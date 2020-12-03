@@ -74,5 +74,5 @@ tasks:
                       - name: DOCKER_BUILDKIT
                         value: '1'
               metadata:
-                name: 'PR #${event.pull_request.number} test ${event.repository.name}'
+                name: 'Test ${event.repository.name}'
                 description: 'Test ${event.repository.name} for PR #${event.pull_request.number}'
