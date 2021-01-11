@@ -25,7 +25,7 @@ import (
 
 const (
 	defaultDockerRepo = "taskcluster/taskcluster"
-	defaultVersion    = "39.1.0"
+	defaultVersion    = "40.0.0"
 	stateKey          = "state"
 	fieldOwner        = "taskcluster.wellplayed.games"
 )
@@ -690,28 +690,6 @@ func (o *TaskClusterOperations) RenderValues(ctx context.Context) (*TaskClusterV
 		values.GitHub.GitHubAppID = (string)(secret.Data["app-id"])
 		values.GitHub.GitHubPrivatePEM = (string)(secret.Data["private-pem"])
 		values.GitHub.WebhookSecret = webhookSecret
-	}
-
-	// Add IRC settings
-	if ref := spec.IRCSecretRef; ref != nil {
-		var secret corev1.Secret
-		name := types.NamespacedName{
-			Namespace: o.Namespace,
-			Name:      ref.Name,
-		}
-		if err := o.Client.Get(ctx, name, &secret); err != nil {
-			return nil, err
-		}
-
-		values.Notify.IRCConfig = IRCConfig{
-			Debug:    len(secret.Data["debug"]) > 0,
-			Nick:     string(secret.Data["nick"]),
-			Password: string(secret.Data["password"]),
-			Port:     string(secret.Data["port"]),
-			RealName: string(secret.Data["real-name"]),
-			Server:   string(secret.Data["server"]),
-			UserName: string(secret.Data["username"]),
-		}
 	}
 
 	// Add Matrix settings
