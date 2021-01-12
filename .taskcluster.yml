@@ -16,6 +16,7 @@ tasks:
         scopes:
           - secrets:get:shared/github
           - secrets:get:shared/cloudbuild-service-account
+          - queue:get-artifact:public/github/*
         metadata:
           owner: '${event.sender.login}@users.noreply.github.com'
           source: '${event.repository.url}'

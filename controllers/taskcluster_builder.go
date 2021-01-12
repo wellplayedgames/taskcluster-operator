@@ -87,16 +87,6 @@ type IndexConfig struct {
 	PulseAccess
 }
 
-type IRCConfig struct {
-	Debug    bool   `json:"irc_debug,omitempty"`
-	Nick     string `json:"irc_nick,omitempty"`
-	Password string `json:"irc_password,omitempty"`
-	Port     string `json:"irc_port,omitempty"`
-	RealName string `json:"irc_real_name,omitempty"`
-	Server   string `json:"irc_server,omitempty"`
-	UserName string `json:"irc_user_name,omitempty"`
-}
-
 type MatrixConfig struct {
 	AccessToken string `json:"matrix_access_token,omitempty"`
 	BaseURL     string `json:"matrix_base_url,omitempty"`
@@ -113,7 +103,6 @@ type NotifyConfig struct {
 	PostgresAccess
 	PulseAccess
 	AWSAccess
-	IRCConfig
 	MatrixConfig
 	SlackConfig
 	EmailSourceAddress string `json:"email_source_address"`
@@ -339,13 +328,6 @@ func (o *TaskClusterOperations) patchResources(objects []runtime.Object) {
 			}
 
 			meta.Annotations["hive.wellplayed.games/enabled"] = "false"
-		}
-
-		if deployment, ok := obj.(*appsv1.Deployment); ok {
-			if o.source.Spec.IRCSecretRef == nil && deployment.Name == "taskcluster-notify-irc" {
-				numReplicas := int32(0)
-				deployment.Spec.Replicas = &numReplicas
-			}
 		}
 
 		// Enable cert-manager on ingress.

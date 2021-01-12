@@ -279,11 +279,6 @@ func (in *InstanceSpec) DeepCopyInto(out *InstanceSpec) {
 		*out = new(v1.LocalObjectReference)
 		**out = **in
 	}
-	if in.IRCSecretRef != nil {
-		in, out := &in.IRCSecretRef, &out.IRCSecretRef
-		*out = new(v1.LocalObjectReference)
-		**out = **in
-	}
 	if in.MatrixSecretRef != nil {
 		in, out := &in.MatrixSecretRef, &out.MatrixSecretRef
 		*out = new(v1.LocalObjectReference)

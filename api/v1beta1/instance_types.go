@@ -61,7 +61,6 @@ type InstanceSpec struct {
 	AccessTokensSecretRef           *corev1.LocalObjectReference `json:"accessTokensSecretRef,omitempty"`
 
 	// Notifications backends
-	IRCSecretRef    *corev1.LocalObjectReference `json:"ircSecretRef,omitempty"`
 	MatrixSecretRef *corev1.LocalObjectReference `json:"matrixSecretRef,omitempty"`
 	SlackSecretRef  *corev1.LocalObjectReference `json:"slackSecretRef,omitempty"`
 
