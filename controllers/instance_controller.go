@@ -113,16 +113,14 @@ func (r *InstanceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	r.Log.Info("Migrating state")
-
+	r.Log.Info("migrating state")
 	if err := ops.MigrateState(ctx); err != nil {
 		progressing.Reason = "MigrateFailed"
 		progressing.Message = err.Error()
 		return ctrl.Result{}, err
 	}
 
-	r.Log.Info("Rendering values")
-
+	r.Log.Info("rendering values")
 	objects, err := ops.Build(ctx)
 	if err != nil {
 		progressing.Reason = "BuildFailed"
@@ -130,8 +128,21 @@ func (r *InstanceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	r.Log.Info("Applying resources")
+	r.Log.Info("finishing previous deployment")
+	result, err := ops.FinishDeployment(ctx)
+	if err != nil {
+		progressing.Reason = "PreviousDeploymentFailed"
+		progressing.Message = err.Error()
+		return ctrl.Result{}, err
+	}
 
+	if !result.IsZero() {
+		progressing.Reason = "WaitingForMigration"
+		progressing.Message = "Waiting for previous DB migration to complete"
+		return result, nil
+	}
+
+	r.Log.Info("applying resources")
 	compReconciler := &composite.Reconciler{
 		Log:    logger,
 		Client: r.Client,

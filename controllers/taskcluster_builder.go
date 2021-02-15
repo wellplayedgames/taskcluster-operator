@@ -2,6 +2,8 @@ package controllers
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"github.com/wellplayedgames/tiny-operator/pkg/helm"
@@ -263,10 +265,11 @@ func (o *TaskClusterOperations) createDBUpgradeJob() []runtime.Object {
 		},
 	}
 
-	job := &batchv1.Job{
+	o.dbUpgradeJob = &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: o.source.Namespace,
-			Name:      fmt.Sprintf("%s-db-upgrade", o.source.Name),
+			Namespace:   o.source.Namespace,
+			Name:        fmt.Sprintf("%s-db-upgrade", o.source.Name),
+			Annotations: map[string]string{},
 		},
 		Spec: batchv1.JobSpec{
 			Template: corev1.PodTemplateSpec{
@@ -302,9 +305,14 @@ func (o *TaskClusterOperations) createDBUpgradeJob() []runtime.Object {
 		},
 	}
 
+	specBy, _ := json.Marshal(&o.dbUpgradeJob.Spec)
+	sum := sha256.Sum256(specBy)
+	o.dbUpgradeHash = base64.StdEncoding.EncodeToString(sum[:])
+	o.dbUpgradeJob.Annotations[hashAnnotation] = o.dbUpgradeHash
+
 	objects := []runtime.Object{
 		secret,
-		job,
+		o.dbUpgradeJob,
 	}
 	return objects
 }
