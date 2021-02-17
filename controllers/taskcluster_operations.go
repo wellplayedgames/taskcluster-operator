@@ -952,30 +952,33 @@ func (o *TaskClusterOperations) FinishDeployment(ctx context.Context) (reconcile
 	var job batchv1.Job
 
 	err := o.Client.Get(ctx, upgradeKey, &job)
-	if err == nil {
-		// Check if it has finished.
-		desiredCompletions := int32(1)
-		if job.Spec.Completions != nil {
-			desiredCompletions = *job.Spec.Completions
-		}
-
-		completions := job.Status.Failed + job.Status.Succeeded
-		if completions < desiredCompletions {
-			o.Logger.Info("waiting for migration job to complete")
-			return reconcile.Result{
-				RequeueAfter: time.Minute,
-			}, nil
-		}
-
-		// Delete the old Job if it doesn't match.
-		if job.Annotations == nil || job.Annotations[hashAnnotation] != o.dbUpgradeHash {
-			o.Logger.Info("deleting old migration job")
-			if err := o.Client.Delete(ctx, &job); err != nil {
-				return reconcile.Result{}, err
-			}
-		}
-	} else if !apierrors.IsNotFound(err) {
+	if err != nil && !apierrors.IsNotFound(err) {
 		return reconcile.Result{}, err
+	} else if err != nil {
+		// Job doesn't exist, we're good.
+		return reconcile.Result{}, nil
+	}
+
+	// Check if it has finished.
+	desiredCompletions := int32(1)
+	if job.Spec.Completions != nil {
+		desiredCompletions = *job.Spec.Completions
+	}
+
+	completions := job.Status.Failed + job.Status.Succeeded
+	if completions < desiredCompletions {
+		o.Logger.Info("waiting for migration job to complete")
+		return reconcile.Result{
+			RequeueAfter: time.Minute,
+		}, nil
+	}
+
+	// Delete the old Job if it doesn't match.
+	if job.Annotations == nil || job.Annotations[hashAnnotation] != o.dbUpgradeHash {
+		o.Logger.Info("deleting old migration job")
+		if err := o.Client.Delete(ctx, &job); err != nil {
+			return reconcile.Result{}, err
+		}
 	}
 
 	return reconcile.Result{}, nil

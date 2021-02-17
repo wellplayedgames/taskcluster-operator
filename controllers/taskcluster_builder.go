@@ -305,6 +305,11 @@ func (o *TaskClusterOperations) createDBUpgradeJob() []runtime.Object {
 		},
 	}
 
+	// Calculate a hash for the DB upgrade job so that we can know when we need
+	// to delete it.
+	//
+	// This is needed because Jobs are thin wrappers around Pods and are
+	// immutable.
 	specBy, _ := json.Marshal(&o.dbUpgradeJob.Spec)
 	sum := sha256.Sum256(specBy)
 	o.dbUpgradeHash = base64.StdEncoding.EncodeToString(sum[:])

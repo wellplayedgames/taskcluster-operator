@@ -128,6 +128,10 @@ func (r *InstanceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
+	// We have to finish the deployment quite late in this process
+	// because we need to have rendered the chart to know what the target
+	// state should look like. (To know, for ex. whether we need to delete
+	// the DB migration Job.)
 	r.Log.Info("finishing previous deployment")
 	result, err := ops.FinishDeployment(ctx)
 	if err != nil {
