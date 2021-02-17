@@ -12,12 +12,14 @@ import (
 	sqlv1beta1 "github.com/wellplayedgames/taskcluster-operator/pkg/cnrm/sql/v1beta1"
 	"github.com/wellplayedgames/taskcluster-operator/pkg/pwgen"
 	"github.com/wellplayedgames/tiny-operator/pkg/errors"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"strconv"
 	"strings"
 	"time"
@@ -25,9 +27,10 @@ import (
 
 const (
 	defaultDockerRepo = "taskcluster/taskcluster"
-	defaultVersion    = "40.0.3"
+	defaultVersion    = "41.0.1"
 	stateKey          = "state"
 	fieldOwner        = "taskcluster.wellplayed.games"
+	hashAnnotation    = fieldOwner + "/hash"
 )
 
 var (
@@ -132,6 +135,9 @@ type TaskClusterOperations struct {
 	dbInfo PostgresDatabase
 	db     *pgx.Conn
 	pulse  *rabbithole.Client
+
+	dbUpgradeHash string
+	dbUpgradeJob  *batchv1.Job
 
 	accessTokenObjects []taskclusterv1beta1.StaticAccessToken
 }
@@ -935,4 +941,45 @@ func (o *TaskClusterOperations) ensureCrypto(name string) {
 
 func (o *TaskClusterOperations) getCrypto(name string) CryptoConfig {
 	return o.ensureServiceAccount(name).CryptoConfig
+}
+
+func (o *TaskClusterOperations) FinishDeployment(ctx context.Context) (reconcile.Result, error) {
+	upgradeKey := types.NamespacedName{
+		Namespace: o.dbUpgradeJob.Namespace,
+		Name:      o.dbUpgradeJob.Name,
+	}
+
+	var job batchv1.Job
+
+	err := o.Client.Get(ctx, upgradeKey, &job)
+	if err != nil && !apierrors.IsNotFound(err) {
+		return reconcile.Result{}, err
+	} else if err != nil {
+		// Job doesn't exist, we're good.
+		return reconcile.Result{}, nil
+	}
+
+	// Check if it has finished.
+	desiredCompletions := int32(1)
+	if job.Spec.Completions != nil {
+		desiredCompletions = *job.Spec.Completions
+	}
+
+	completions := job.Status.Failed + job.Status.Succeeded
+	if completions < desiredCompletions {
+		o.Logger.Info("waiting for migration job to complete")
+		return reconcile.Result{
+			RequeueAfter: time.Minute,
+		}, nil
+	}
+
+	// Delete the old Job if it doesn't match.
+	if job.Annotations == nil || job.Annotations[hashAnnotation] != o.dbUpgradeHash {
+		o.Logger.Info("deleting old migration job")
+		if err := o.Client.Delete(ctx, &job); err != nil {
+			return reconcile.Result{}, err
+		}
+	}
+
+	return reconcile.Result{}, nil
 }
