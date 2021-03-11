@@ -428,7 +428,7 @@ func (o *TaskClusterOperations) migrateAccessTokenResources(ctx context.Context)
 			accessToken.Status.Created = true
 			accessToken.Status.ObservedGeneration = &accessToken.Generation
 
-			if err := o.Client.Update(ctx, accessToken); err != nil {
+			if err := o.Client.Status().Update(ctx, accessToken); err != nil {
 				return err
 			}
 		}
