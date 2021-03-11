@@ -27,7 +27,7 @@ import (
 
 const (
 	defaultDockerRepo = "taskcluster/taskcluster"
-	defaultVersion    = "42.0.0"
+	defaultVersion    = "42.1.1"
 	stateKey          = "state"
 	fieldOwner        = "taskcluster.wellplayed.games"
 	hashAnnotation    = fieldOwner + "/hash"
@@ -428,7 +428,7 @@ func (o *TaskClusterOperations) migrateAccessTokenResources(ctx context.Context)
 			accessToken.Status.Created = true
 			accessToken.Status.ObservedGeneration = &accessToken.Generation
 
-			if err := o.Client.Update(ctx, accessToken); err != nil {
+			if err := o.Client.Status().Update(ctx, accessToken); err != nil {
 				return err
 			}
 		}
