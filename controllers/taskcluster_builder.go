@@ -19,7 +19,6 @@ import (
 
 	taskclusterv1beta1 "github.com/wellplayedgames/taskcluster-operator/api/v1beta1"
 	batchv1beta1 "k8s.io/api/batch/v1beta1"
-	batchv2alpha1 "k8s.io/api/batch/v2alpha1"
 	extensionsv1beta1 "k8s.io/api/extensions/v1beta1"
 )
 
@@ -326,15 +325,6 @@ func (o *TaskClusterOperations) patchResources(objects []runtime.Object) {
 	// Make CronJobs replace.
 	for _, obj := range objects {
 		if job, ok := obj.(*batchv1beta1.CronJob); ok {
-			meta := &job.Spec.JobTemplate.Spec.Template.ObjectMeta
-			if meta.Annotations == nil {
-				meta.Annotations = map[string]string{}
-			}
-
-			meta.Annotations["hive.wellplayed.games/enabled"] = "false"
-		}
-
-		if job, ok := obj.(*batchv2alpha1.CronJob); ok {
 			meta := &job.Spec.JobTemplate.Spec.Template.ObjectMeta
 			if meta.Annotations == nil {
 				meta.Annotations = map[string]string{}
