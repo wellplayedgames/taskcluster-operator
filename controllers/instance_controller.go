@@ -51,8 +51,7 @@ type InstanceReconciler struct {
 // +kubebuilder:rbac:groups=extensions,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=sql.cnrm.cloud.google.com,resources=sqlinstances;sqldatabases,verbs=get;list;watch
 
-func (r *InstanceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	ctx := context.Background()
+func (r *InstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := r.Log.WithValues("instance", req.NamespacedName)
 
 	var instance taskclusterv1beta1.Instance
@@ -147,12 +146,14 @@ func (r *InstanceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	r.Log.Info("applying resources")
-	compReconciler := &composite.Reconciler{
-		Log:    logger,
-		Client: r.Client,
-		Scheme: r.Scheme,
+	compReconciler, err := composite.New(logger, r.Client, r.Scheme, &instance, resourceOwner)
+	if err != nil {
+		progressing.Reason = "FailedCreatingReconcile"
+		progressing.Message = err.Error()
+		return ctrl.Result{}, err
 	}
-	if err := compReconciler.Reconcile(ctx, resourceOwner, &instance, objects, false); err != nil {
+
+	if err := compReconciler.Reconcile(ctx, objects); err != nil {
 		progressing.Reason = "CompositeReconcileFailed"
 		progressing.Message = err.Error()
 		return ctrl.Result{}, err

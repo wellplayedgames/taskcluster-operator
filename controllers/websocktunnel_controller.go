@@ -97,8 +97,7 @@ func (r *WebSockTunnelReconciler) reconcileSecret(ctx context.Context, source *t
 	return r.Client.Update(ctx, &secret)
 }
 
-func (r *WebSockTunnelReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	ctx := context.Background()
+func (r *WebSockTunnelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := r.Log.WithValues("websocktunnel", req.NamespacedName)
 
 	var wst taskclusterv1beta1.WebSockTunnel
@@ -162,12 +161,14 @@ func (r *WebSockTunnelReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		return ctrl.Result{}, err
 	}
 
-	compReconciler := &composite.Reconciler{
-		Log:    logger,
-		Client: r.Client,
-		Scheme: r.Scheme,
+	compReconciler, err := composite.New(logger, r.Client, r.Scheme, &wst, resourceOwner)
+	if err != nil {
+		progressing.Reason = "CreateReconcilerFailed"
+		progressing.Message = err.Error()
+		return ctrl.Result{}, err
 	}
-	if err := compReconciler.Reconcile(ctx, resourceOwner, &wst, objects, false); err != nil {
+
+	if err := compReconciler.Reconcile(ctx, objects); err != nil {
 		progressing.Reason = "CompositeReconcileFailed"
 		progressing.Message = err.Error()
 		return ctrl.Result{}, err
@@ -181,7 +182,7 @@ func (r *WebSockTunnelReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 func (r *WebSockTunnelReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	ctx := context.Background()
 
-	if err := mgr.GetFieldIndexer().IndexField(ctx, &taskclusterv1beta1.AccessToken{}, fieldInstanceRef, func(obj runtime.Object) []string {
+	if err := mgr.GetFieldIndexer().IndexField(ctx, &taskclusterv1beta1.AccessToken{}, fieldInstanceRef, func(obj client.Object) []string {
 		token := obj.(*taskclusterv1beta1.AccessToken)
 		instance := fmt.Sprintf("%s/%s", token.Spec.InstanceRef.Namespace, token.Spec.InstanceRef.Name)
 		return []string{instance}

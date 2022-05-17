@@ -13,8 +13,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"strings"
 
 	taskclusterv1beta1 "github.com/wellplayedgames/taskcluster-operator/api/v1beta1"
@@ -200,7 +200,7 @@ type TaskClusterValues struct {
 	AzureAccountID      string `json:"azureAccountId"`
 }
 
-func (o *TaskClusterOperations) renderChart(values *TaskClusterValues) ([]runtime.Object, error) {
+func (o *TaskClusterOperations) renderChart(values *TaskClusterValues) ([]client.Object, error) {
 	chrt, err := loader.LoadDir(o.ChartPath)
 	if err != nil {
 		return nil, err
@@ -250,7 +250,7 @@ func (o *TaskClusterOperations) renderChart(values *TaskClusterValues) ([]runtim
 	return objects, nil
 }
 
-func (o *TaskClusterOperations) createDBUpgradeJob() []runtime.Object {
+func (o *TaskClusterOperations) createDBUpgradeJob() []client.Object {
 	secretName := fmt.Sprintf("%s-db-admin", o.source.Name)
 	dbUrl := o.dbInfo.ConnectionString(true, true)
 
@@ -314,14 +314,14 @@ func (o *TaskClusterOperations) createDBUpgradeJob() []runtime.Object {
 	o.dbUpgradeHash = base64.StdEncoding.EncodeToString(sum[:])
 	o.dbUpgradeJob.Annotations[hashAnnotation] = o.dbUpgradeHash
 
-	objects := []runtime.Object{
+	objects := []client.Object{
 		secret,
 		o.dbUpgradeJob,
 	}
 	return objects
 }
 
-func (o *TaskClusterOperations) patchResources(objects []runtime.Object) {
+func (o *TaskClusterOperations) patchResources(objects []client.Object) {
 	// Make CronJobs replace.
 	for _, obj := range objects {
 		if job, ok := obj.(*batchv1beta1.CronJob); ok {
@@ -382,7 +382,7 @@ func (o *TaskClusterOperations) patchResources(objects []runtime.Object) {
 	}
 }
 
-func (o *TaskClusterOperations) Build(ctx context.Context) ([]runtime.Object, error) {
+func (o *TaskClusterOperations) Build(ctx context.Context) ([]client.Object, error) {
 	values, err := o.RenderValues(ctx)
 	if err != nil {
 		return nil, err

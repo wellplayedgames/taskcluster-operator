@@ -6,8 +6,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	certmanagerv1alpha2 "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1alpha2"
 	taskclusterv1beta1 "github.com/wellplayedgames/taskcluster-operator/api/v1beta1"
@@ -74,14 +74,14 @@ type WebSockTunnelBuilder struct {
 	Source *taskclusterv1beta1.WebSockTunnel
 }
 
-func (b *WebSockTunnelBuilder) Build() ([]runtime.Object, error) {
+func (b *WebSockTunnelBuilder) Build() ([]client.Object, error) {
 	name := b.Source.Name
 	namespace := b.Source.Namespace
 	spec := &b.Source.Spec
 	tlsSecretName := fmt.Sprintf("%s-tls", name)
 	envoyConfigName := fmt.Sprintf("%s-envoy", name)
 
-	objects := []runtime.Object{
+	objects := []client.Object{
 		&certmanagerv1alpha2.Certificate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      name,
@@ -155,7 +155,7 @@ func (b *WebSockTunnelBuilder) Build() ([]runtime.Object, error) {
 									},
 								},
 								ReadinessProbe: &corev1.Probe{
-									Handler: corev1.Handler{
+									ProbeHandler: corev1.ProbeHandler{
 										HTTPGet: &corev1.HTTPGetAction{
 											Path:   "/__lbheartbeat__",
 											Port:   intstr.FromInt(80),
@@ -166,7 +166,7 @@ func (b *WebSockTunnelBuilder) Build() ([]runtime.Object, error) {
 									PeriodSeconds:       3,
 								},
 								LivenessProbe: &corev1.Probe{
-									Handler: corev1.Handler{
+									ProbeHandler: corev1.ProbeHandler{
 										HTTPGet: &corev1.HTTPGetAction{
 											Path:   "/__lbheartbeat__",
 											Port:   intstr.FromInt(80),
