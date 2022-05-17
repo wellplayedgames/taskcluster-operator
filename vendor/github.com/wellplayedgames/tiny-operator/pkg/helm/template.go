@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"io"
 	"path"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"strings"
 
 	"helm.sh/helm/v3/pkg/chart"
@@ -19,7 +20,7 @@ const (
 )
 
 // RenderChart renders a helm chart into an array of Kubernetes objects.
-func RenderChart(scheme *runtime.Scheme, chrt *chart.Chart, values map[string]interface{}, namespace string) ([]runtime.Object, error) {
+func RenderChart(scheme *runtime.Scheme, chrt *chart.Chart, values map[string]interface{}, namespace string) ([]client.Object, error) {
 	options := chartutil.ReleaseOptions{
 		Name:      "RELEASE-NAME",
 		Namespace: namespace,
@@ -38,7 +39,7 @@ func RenderChart(scheme *runtime.Scheme, chrt *chart.Chart, values map[string]in
 		return nil, err
 	}
 
-	var objects []runtime.Object
+	var objects []client.Object
 	codecFactory := serializer.NewCodecFactory(scheme)
 	d := codecFactory.UniversalDeserializer()
 	for f, v := range files {
@@ -67,7 +68,7 @@ func RenderChart(scheme *runtime.Scheme, chrt *chart.Chart, values map[string]in
 				return nil, err
 			}
 
-			objects = append(objects, obj)
+			objects = append(objects, obj.(client.Object))
 		}
 	}
 
