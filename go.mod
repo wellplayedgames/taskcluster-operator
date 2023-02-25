@@ -15,7 +15,7 @@ require (
 	github.com/streadway/amqp v1.0.0 // indirect
 	github.com/wellplayedgames/tiny-operator v0.0.0-20200908164425-0b20788cc4c0
 	golang.org/x/crypto v0.0.0-20200709230013-948cd5f35899 // indirect
-	golang.org/x/sys v0.0.0-20200625212154-ddb9806d33ae // indirect
+	golang.org/x/sys v0.1.0 // indirect
 	golang.org/x/time v0.0.0-20200630173020-3af7569d3a1e // indirect
 	golang.org/x/tools v0.0.0-20200512131952-2bc93b1c0c88 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.1.0 // indirect
